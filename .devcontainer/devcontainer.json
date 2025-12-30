@@ -1,0 +1,15 @@
+{
+  "name": "Rust",
+  "image": "rust",
+
+  "customizations" : {
+    "jetbrains" : {
+      "backend" : "RustRover",
+      
+      "plugins" : [
+        "com.github.copilot"
+      ],
+    }
+  },
+  "remoteUser": "root"
+}

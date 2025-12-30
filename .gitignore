@@ -16,7 +16,7 @@
 # Environment files (containing secrets, API keys, credentials)
 .env
 *.env
-.env.*
+.env
 
 # Local configuration that shouldn't be shared
 *.local
@@ -75,11 +75,16 @@ out/
 .idea_backup/
 .idea/replstate.xml
 
+.idea/*.iml
+
 .idea/checkstyle-idea.xml
 .idea/encodings.xml
 .idea/misc.xml
 .idea/vcs.xml
 .idea/jsLibraryMappings.xml
+
+.idea/copilot.data.migration.agent.xml
+.idea/copilot.data.migration.ask2agent.xml
 
 .idea/assetWizardSettings.xml
 .idea/kotlinc.xml

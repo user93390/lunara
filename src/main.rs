@@ -1,50 +1,81 @@
+/*
+ * Copyright 2025 seasnail1
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+extern crate log;
+mod account;
 mod api;
 mod database;
+pub(crate) mod routes;
 
-use crate::api::route;
-use crate::database::Database;
+use crate::database::{DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER};
+use crate::routes::{api_route, auth_route};
 use axum::Router;
 use dotenv::dotenv;
+use log::{info, LevelFilter};
 use std::env;
 use std::error::Error;
+use axum::routing::get;
 use tokio::net::TcpListener;
+
+const SERVER_ADDR: &str = "0.0.0.0";
+const SERVER_PORT: u16 = 5000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let database = database().await;
-    let api_route = route::api_users(database);
+    color_eyre::install()?;
 
-    let app = Router::new().nest("/api", api_route.await);
+    env_logger::builder()
+        .format_timestamp_secs()
+        .format_level(true)
+        .filter_level(LevelFilter::Debug)
+        .init();
 
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
+    info!("Running Lunara.");
 
-    println!("listening on {}", listener.local_addr()?);
-    axum::serve(listener, app).await?;
-
-    println!("Closing server");
-
-    Ok(())
-}
-
-async fn database() -> Database {
     dotenv().ok();
 
-    let db_host = env::var("HOST").expect("Bad env type");
-    let db_port = env::var("PORT").expect("Bad env type");
-    let db_name = env::var("NAME").expect("Bad env type");
-    let db_user = env::var("USER").expect("Bad env type");
-    let db_password = env::var("PASSWORD").expect("Bad env type");
+    // Load environment variables.
+    info!("Loading environment variables");
 
-    let connection_string = match db_password {
-        pwd if !pwd.is_empty() => format!(
-            "host={} port={} dbname={} user={} password={}",
-            db_host, db_port, db_name, db_user, pwd
-        ),
-        _ => format!(
-            "host={} port={} dbname={} user={}",
-            db_host, db_port, db_name, db_user
-        ),
-    };
+    *DB_PASSWORD.lock().await = env::var("PASSWORD")?;
+    *DB_HOST.lock().await = env::var("HOST")?;
+    *DB_PORT.lock().await = env::var("PORT")?;
+    *DB_NAME.lock().await = env::var("NAME")?;
+    *DB_USER.lock().await = env::var("USER")?;
 
-    Database::connect(&connection_string).await.unwrap()
+    info!("Done loading variables!");
+
+    info!("Initializing database.");
+    let database = database::database().await;
+
+    info!("Configuring routes");
+    let api_route = api_route::user_api(database);
+    let auth_route = auth_route::auth_api();
+
+    let app = Router::new()
+        .nest("/api", api_route.await)
+        .nest("/auth/v1", auth_route.await)
+        .route("/", get(|| async { "Lunara is running!" }));
+
+    let string_addr = format!("{}:{}", SERVER_ADDR, SERVER_PORT);
+
+    info!("Done! Now serving {}", string_addr);
+
+    let listener = TcpListener::bind(string_addr).await?;
+    
+    axum::serve(listener, app).await?;
+    Ok(())
 }

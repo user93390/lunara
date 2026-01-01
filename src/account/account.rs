@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Lunara
+ * Copyright 2025 seasnail1
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,4 +14,28 @@
  * limitations under the License.
  */
 
-pub(crate) mod auth;
+use uuid::Uuid;
+
+pub(crate) struct Account {
+    pub(crate) id: Uuid,
+    pub(crate) username: String,
+    pub(crate) password: String,
+}
+
+impl Account {
+    pub fn new(id: Uuid, username: String, password: String) -> Self {
+        Self { id, username, password }
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+}

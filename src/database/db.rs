@@ -1,7 +1,25 @@
+/*
+ * Copyright 2025 seasnail1
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+use std::sync::Arc;
 use tokio_postgres::{Client, Error, NoTls, Row};
 
+#[derive(Clone)]
 pub struct Database {
-    client: Client,
+    client: Arc<Client>,
 }
 
 impl Database {
@@ -14,7 +32,9 @@ impl Database {
             }
         });
 
-        Ok(Self { client })
+        Ok(Self {
+            client: Arc::new(client),
+        })
     }
 
     pub async fn execute(
@@ -41,22 +61,6 @@ impl Database {
         self.client.query_one(query, params).await
     }
 
-    pub async fn query_opt(
-        &self,
-        query: &str,
-        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
-    ) -> Result<Option<Row>, Error> {
-        self.client.query_opt(query, params).await
-    }
-
-    pub async fn batch_execute(&self, query: &str) -> Result<(), Error> {
-        self.client.batch_execute(query).await
-    }
-
-    pub fn client(&self) -> &Client {
-        &self.client
-    }
-
     pub async fn insert(
         &self,
         table: &str,
@@ -64,57 +68,8 @@ impl Database {
         values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<u64, Error> {
         let placeholders: Vec<String> = (1..=values.len()).map(|i| format!("${}", i)).collect();
-        let query = format!(
-            "INSERT INTO {} ({}) VALUES ({})",
-            table,
-            columns.join(", "),
-            placeholders.join(", ")
-        );
+        let query = format!("INSERT INTO {} ({}) VALUES ({})", table, columns.join(", "), placeholders.join(", "));
         self.execute(&query, values).await
-    }
-
-    pub async fn insert_returning(
-        &self,
-        table: &str,
-        columns: &[&str],
-        values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
-        returning: &str,
-    ) -> Result<Row, Error> {
-        let placeholders: Vec<String> = (1..=values.len()).map(|i| format!("${}", i)).collect();
-        let query = format!(
-            "INSERT INTO {} ({}) VALUES ({}) RETURNING {}",
-            table,
-            columns.join(", "),
-            placeholders.join(", "),
-            returning
-        );
-        self.query_one(&query, values).await
-    }
-
-    pub async fn update(
-        &self,
-        table: &str,
-        set_columns: &[&str],
-        values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
-        where_clause: &str,
-        where_values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
-    ) -> Result<u64, Error> {
-        let set_parts: Vec<String> = set_columns
-            .iter()
-            .enumerate()
-            .map(|(i, col)| format!("{} = ${}", col, i + 1))
-            .collect();
-        let where_start = values.len() + 1;
-        let all_values: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-            values.iter().chain(where_values.iter()).copied().collect();
-
-        let query = format!(
-            "UPDATE {} SET {} WHERE {}",
-            table,
-            set_parts.join(", "),
-            where_clause.replace("$1", &format!("${}", where_start))
-        );
-        self.execute(&query, &all_values).await
     }
 
     pub async fn delete(
@@ -135,12 +90,7 @@ impl Database {
         where_values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<Vec<Row>, Error> {
         let query = match where_clause {
-            Some(clause) => format!(
-                "SELECT {} FROM {} WHERE {}",
-                columns.join(", "),
-                table,
-                clause
-            ),
+            Some(clause) => format!("SELECT {} FROM {} WHERE {}", columns.join(", "), table, clause),
             None => format!("SELECT {} FROM {}", columns.join(", "), table),
         };
         self.query(&query, where_values).await
@@ -153,12 +103,7 @@ impl Database {
         where_clause: &str,
         where_values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<Row, Error> {
-        let query = format!(
-            "SELECT {} FROM {} WHERE {}",
-            columns.join(", "),
-            table,
-            where_clause
-        );
+        let query = format!("SELECT {} FROM {} WHERE {}", columns.join(", "), table, where_clause);
         self.query_one(&query, where_values).await
     }
 
@@ -168,24 +113,7 @@ impl Database {
         where_clause: &str,
         where_values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
     ) -> Result<bool, Error> {
-        let query = format!(
-            "SELECT EXISTS(SELECT 1 FROM {} WHERE {})",
-            table, where_clause
-        );
-        let row = self.query_one(&query, where_values).await?;
-        Ok(row.get(0))
-    }
-
-    pub async fn count(
-        &self,
-        table: &str,
-        where_clause: Option<&str>,
-        where_values: &[&(dyn tokio_postgres::types::ToSql + Sync)],
-    ) -> Result<i64, Error> {
-        let query = match where_clause {
-            Some(clause) => format!("SELECT COUNT(*) FROM {} WHERE {}", table, clause),
-            None => format!("SELECT COUNT(*) FROM {}", table),
-        };
+        let query = format!("SELECT EXISTS(SELECT 1 FROM {} WHERE {})", table, where_clause);
         let row = self.query_one(&query, where_values).await?;
         Ok(row.get(0))
     }

@@ -14,8 +14,6 @@ FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add postgresql17 postgresql17-contrib postgresql17-openrc
-
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/Lunara /usr/local/bin/Lunara
 
 CMD ["Lunara"]

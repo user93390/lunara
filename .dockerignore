@@ -2,3 +2,6 @@ LICENSE
 README.md
 Dockerfile
 .gitignore
+Justfile
+compose.yaml
+.env

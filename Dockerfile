@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache musl-dev
 RUN rustup target add x86_64-unknown-linux-musl
 
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 COPY src ./src
 
 RUN cargo build --release --target x86_64-unknown-linux-musl

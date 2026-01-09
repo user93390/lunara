@@ -13,12 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 extern crate log;
 mod account;
 mod api;
 mod database;
-pub(crate) mod routes;
+mod routes;
 
 use crate::database::{DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER};
 use crate::routes::{api_route, auth_route};
@@ -29,6 +28,7 @@ use std::env;
 use std::error::Error;
 use axum::routing::get;
 use tokio::net::TcpListener;
+
 
 const SERVER_ADDR: &str = "0.0.0.0";
 const SERVER_PORT: u16 = 5000;

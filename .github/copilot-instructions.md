@@ -2,7 +2,7 @@
 
 IDE: RustRover by JetBrains
 Language: Rust
-Framework: Axum
+Framework: Axum + Fluttger
 Operating System (OS): Ubuntu 24.0
 Architecture: x86_64
 

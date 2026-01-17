@@ -2,10 +2,7 @@ FROM rust:alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache musl-dev
-
-# linux and windows. x64 targets
-RUN rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-msvc 
+RUN apk add --no-cache musl-dev bash curl git libstdc++ libgcc
 
 # ARM systems. Optional but recommended.
 RUN rustup target add aarch64-unknown-linux-gnu \ 
@@ -21,12 +18,28 @@ RUN rustup component add rust-docs
 
 RUN cargo install --path . --root /build
 
+FROM alpine:latest AS flutter_builder
+
+WORKDIR /flutter_app
+
+RUN apk add --no-cache bash curl git unzip xz
+
+RUN git clone https://github.com/flutter/flutter.git /flutter
+ENV PATH="/flutter/bin:${PATH}"
+
+RUN flutter config --no-analytics
+RUN flutter doctor
+
+COPY flutter ./
+
+RUN flutter build web --release
+
 FROM alpine:latest
 
 WORKDIR /app
 
 COPY --from=builder /build/bin/Lunara /usr/local/bin/Lunara
 COPY database.properties /app/database.properties
-COPY flutter/build/web /app/flutter/build/web
+COPY --from=flutter_builder /flutter_app/build/web /app/flutter/build/web
 
 CMD ["Lunara"]

@@ -35,6 +35,12 @@ void main() {
 
   logger.i("Starting Lunara v$version...");
 
+  const wasm = bool.fromEnvironment('dart.tool.dart2wasm');
+
+  if (wasm) {
+    logger.i("Note: You are using wasm. Great performance comes with great responsibility!");
+  }
+
   runApp(const LunaraApp());
 }
 

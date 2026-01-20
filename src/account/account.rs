@@ -17,25 +17,29 @@
 use uuid::Uuid;
 
 pub(crate) struct Account {
-    pub(crate) id: Uuid,
-    pub(crate) username: String,
-    pub(crate) password: String,
+	pub(crate) id: Uuid,
+	pub(crate) username: String,
+	pub(crate) password: String,
 }
 
 impl Account {
-    pub fn new(id: Uuid, username: String, password: String) -> Self {
-        Self { id, username, password }
-    }
+	pub fn new(id: Uuid, username: String, password: String) -> Self {
+		Self {
+			id,
+			username,
+			password,
+		}
+	}
 
-    pub fn id(&self) -> Uuid {
-        self.id
-    }
+	pub fn id(&self) -> Uuid {
+		self.id
+	}
 
-    pub fn username(&self) -> &str {
-        &self.username
-    }
+	pub fn username(&self) -> &str {
+		&self.username
+	}
 
-    pub fn password(&self) -> &str {
-        &self.password
-    }
+	pub fn password(&self) -> &str {
+		&self.password
+	}
 }

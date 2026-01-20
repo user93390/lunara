@@ -1,19 +1,19 @@
-# General
-hard_tabs = false
-tab_spaces = 4
-max_width = 120
-use_small_heuristics = "Default"
-newline_style = "Auto"
-brace_style = "SameLineWhere"
-fn_args_density = "Wide"
-fn_call_width = 90
-merge_derives = false
-format_strings = true
-
-# Imports
-merge_imports = true
-imports_layout = "Horizontal"
+comment_width = 100
+format_code_in_doc_comments = true
+fn_params_layout = "Compressed"
+imports_granularity = "Crate"
+imports_layout = "Vertical"
+wrap_comments = true
 reorder_imports = true
-imports_indent = "Block"
-imports_granularity = "One"
-group_imports = "StdExternalCrate"
+newline_style = "Unix"
+indent_style = "Block"
+brace_style = "PreferSameLine"
+color = "Always"
+combine_control_expr = false
+condense_wildcard_suffixes = true
+control_brace_style = "ClosingNextLine"
+enum_discrim_align_threshold = 20
+force_multiline_blocks = true
+format_macro_matchers = true
+format_macro_bodies = true
+hard_tabs = true

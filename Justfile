@@ -21,13 +21,11 @@ run:
 build_front:
   cd flutter && flutter build web
 
-dock_init: build_front
+dock_init:
   docker build -t lunara .
 
 dock_compose:
   docker-compose up -d
-
-build_all: dock_stop clean build dock_init dock_compose
 
 # Not really recommended.
 kill_force:
@@ -36,3 +34,5 @@ kill_force:
 # This better.
 dock_stop:
   docker-compose down
+
+build_all: clean build dock_init

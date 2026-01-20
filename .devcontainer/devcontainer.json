@@ -4,6 +4,10 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "dev",
+  "runArgs": [
+    "--init",
+    "--privileged"
+  ],
   "customizations": {
     "jetbrains": {
       "backend": "RustRover",

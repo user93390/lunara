@@ -24,27 +24,31 @@ use axum::Router;
 use log::info;
 
 pub(crate) async fn auth_api(db: Database) -> Router {
-    Router::new()
-        .route("/signup/:uuid/:username/:password", get(signup_handler))
-        .route("/login/:username/:password", get(login_handler))
-        .with_state(db)
+	Router::new()
+		.route("/signup/{uuid}/{username}/{password}", get(signup_handler))
+		.route("/login/{username}/{password}", get(login_handler))
+		.with_state(db)
 }
 
 async fn signup_handler(
-    Path((uuid, username, password)): Path<(String, String, String)>,
+	Path((uuid, username, password)): Path<(String, String, String)>,
 ) -> Result<StatusCode, StatusCode> {
-    create_account(Path((uuid.parse().map_err(|_| StatusCode::BAD_REQUEST)?, username, password)))
-        .await
+	create_account(Path((
+		uuid.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
+		username,
+		password,
+	)))
+	.await
 }
 
 async fn login_handler(
-    Path((username, password)): Path<(String, String)>,
+	Path((username, password)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
-    let uuid = try_login(Path((username, password)))
-        .await
-        .ok_or(StatusCode::BAD_REQUEST)?;
+	let uuid = try_login(Path((username, password)))
+		.await
+		.ok_or(StatusCode::BAD_REQUEST)?;
 
-    info!("Logged in as {}!", uuid);
+	info!("Logged in as {}!", uuid);
 
-    Ok(StatusCode::OK)
+	Ok(StatusCode::OK)
 }

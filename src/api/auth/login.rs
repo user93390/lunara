@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-use crate::database::database;
+use crate::database;
+use crate::database::Database;
 use axum::extract::Path;
 use log::warn;
+use tokio_postgres::Row;
 use uuid::Uuid;
 
 pub(crate) async fn try_login(Path((username, password)): Path<(String, String)>) -> Option<Uuid> {
-	let db = database().await.ok()?;
+	let db: Database = database().await.ok()?;
 
-	let rows = db
+	let rows: Vec<Row> = db
 		.select("accounts", &["uid"], Some("username = $1"), &[&username])
 		.await
 		.ok()?;
@@ -37,12 +39,12 @@ pub(crate) async fn try_login(Path((username, password)): Path<(String, String)>
 
 	let uuid: Uuid = row.get(0);
 
-	let password_row = db
+	let password_row: Row = db
 		.select_one("accounts", &["password"], "uid = $1", &[&uuid])
 		.await
 		.ok()?;
 
-	let valid = password_row.get::<usize, String>(0).eq(&password);
+	let valid: bool = password_row.get::<usize, String>(0).eq(&password);
 
 	if !valid {
 		return None;

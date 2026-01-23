@@ -24,7 +24,7 @@ impl KeyringService {
 		let key: String = key.to_string();
 		let secret: String = secret.to_string();
 
-		tokio::task::spawn_blocking(move || match Entry::new(&service_name, &key) {
+		spawn_blocking(move || match Entry::new(&service_name, &key) {
 			Ok(entry) => {
 				if let Err(e) = entry.set_password(&secret) {
 					error!("Failed to set keyring secret value: {:?}", e);

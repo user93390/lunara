@@ -15,7 +15,7 @@
  */
 
 use crate::account::account::Account;
-use crate::database::database;
+use crate::database;
 use crate::params;
 use axum::extract::Path;
 use axum::http::StatusCode;

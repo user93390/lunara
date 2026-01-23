@@ -1,11 +1,14 @@
 services:
   postgres_database:
     image: postgres:alpine3.20
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "5433:5432"
     volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:Z
       - postgres_dat:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
   application:
     image: lunara
@@ -14,9 +17,8 @@ services:
       - "5000:5000"
     depends_on:
       - postgres_database
-    volumes:
-      - keyring_service:/root/.local/share/keyrings
+    security_opt:
+      - seccomp:unconfined
 
 volumes:
   postgres_dat:
-  keyring_service:

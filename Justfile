@@ -2,8 +2,7 @@
 
 # Cargo helper functions
 build:
-  cargo build --release    
-  cd flutter && flutter build web --wasm
+  cargo build --release
 
 check:
   cargo check --release
@@ -11,16 +10,7 @@ check:
 clean:
   cargo clean --release
 
-  cd flutter && flutter clean
-
-run:
-  cargo run -- release
-
 # Docker helper functions
-
-build_front:
-  cd flutter && flutter build web
-
 dock_init:
   docker build -t lunara .
 
@@ -35,4 +25,5 @@ kill_force:
 dock_stop:
   docker-compose down
 
+dock_auto: build_all dock_compose
 build_all: clean build dock_init

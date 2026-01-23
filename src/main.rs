@@ -26,16 +26,21 @@ use crate::{
 	database::Database,
 	routes::{api_route, auth_route},
 };
+use std::collections::HashMap;
 
+use crate::config::Config;
 use crate::keyring::KeyringService;
 
 use axum::Router;
 
 use log::{info, warn, LevelFilter};
+use once_cell::sync::Lazy;
 use std::error::Error;
 use std::rc::Rc;
 use tokio::net::TcpListener;
-use tower_http::services::ServeDir;
+use tokio::sync::{Mutex, MutexGuard};
+
+static CONFIG: Lazy<Mutex<Option<Config>>> = Lazy::new(|| Mutex::new(None));
 
 const SERVER_ADDR: &str = "0.0.0.0";
 const SERVER_PORT: u16 = 5000;
@@ -47,28 +52,33 @@ const POSTGRES_NAME_DEF: &str = "postgres";
 const POSTGRES_USER_DEF: &str = "postgres";
 const POSTGRES_PASSWORD_DEF: &str = "postgres";
 
+
+
 /// <p>Create an asynchronous router.</p>
-/// <p>Return all routes by nesting them inside a brand new route.</p>
-/// Pretty expensive fuction.
-pub async fn app() -> Result<Router, Box<dyn Error + Send + Sync>> {
-	// create a smart pointer just for database.
-	let database_rc: Rc<Database> = Rc::new(database().await?);
+/// <p>Return all routes by nesting them inside a brand-new route.</p>
+/// Pretty expensive function.
+async fn app(config: Config) -> Result<Router, Box<dyn Error + Send + Sync>> {
+	let conn_str: &String = config.conn_str();
 
-	let auth_route: Router<_> = auth_route::auth_api((*database_rc).clone()).await;
-	let api_route: Router<_> = api_route::user_api((*database_rc).clone()).await;
+	info!("{}", conn_str);
 
-	let flutter_dir = ServeDir::new("flutter/build/web");
+	let result: Database = database::database(conn_str).await?;
 
-	Ok(Router::new()
+	// create pointer.
+	let pnt: Rc<Database> = Rc::new(result);
+
+	let auth_route: Router<_> = auth_route::auth_api((*pnt).clone()).await;
+	let api_route: Router<_> = api_route::user_api((*pnt).clone()).await;
+
+	Ok(
+		Router::new()
 		.nest("/auth/v1", auth_route)
 		.nest("/api", api_route)
-		.fallback_service(flutter_dir))
+	)
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-	let mut first_time: bool = false;
-
 	color_eyre::install()?;
 
 	env_logger::builder()
@@ -82,12 +92,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	info!("Running Lunara.");
 
 	let keyring_service: KeyringService = KeyringService::new("Lunara");
-
 	let key: bool = keyring_service.secret_exists("key").await;
 
-	if !key {
-		first_time = true;
+	let first_time: bool = !key;
 
+	info!("First time? {}", first_time);
+
+	if first_time {
 		warn!("This is your first time running Lunara.");
 
 		// gen new 128 key
@@ -95,37 +106,36 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		keyring_service
 			.set_secret("key", &hex::encode(new_key))
 			.await?;
+
+		init_kering(&keyring_service).await?;
 	}
 
-	info!("First time? {}", first_time);
+	let host = keyring_service.get_secret("db.host").await?;
+	let port = keyring_service.get_secret("db.port").await?;
+	let name = keyring_service.get_secret("db.name").await?;
+	let user = keyring_service.get_secret("db.user").await?;
+	let password = keyring_service.get_secret("db.password").await?;
 
+	let connection_string = format!(
+		"host={} port={} dbname={} user={} password={}",
+		host, port, name, user, password
+	);
 
-	// Should we init keys?
-	if first_time {
-		keyring_service
-			.set_secret("db.host", POSTGRES_HOST_DEF)
-			.await?;
-		info!("Set db.host: {}", POSTGRES_HOST_DEF);
-		keyring_service
-			.set_secret("db.port", POSTGRES_PORT_DEF)
-			.await?;
-		info!("Set db.port: {}", POSTGRES_PORT_DEF);
-		keyring_service
-			.set_secret("db.name", POSTGRES_NAME_DEF)
-			.await?;
-		info!("Set db.name: {}", POSTGRES_NAME_DEF);
-		keyring_service
-			.set_secret("db.user", POSTGRES_USER_DEF)
-			.await?;
-		info!("Set db.user: {}", POSTGRES_USER_DEF);
-		keyring_service
-			.set_secret("db.password", POSTGRES_PASSWORD_DEF)
-			.await?;
-		info!("Set db.password: {}", POSTGRES_PASSWORD_DEF);
-	}
+	let key: String = keyring_service.get_secret("key").await?;
+
+	let mut key_hex: [u8; 32] = [0u8; 32];
+	let bytes: Vec<u8> = hex::decode(key)?;
+	key_hex.copy_from_slice(&bytes[..32]);
+
+	let config: Config = Config::default()
+		.with_key(key_hex)
+		.with_conn_str(connection_string)
+		.build();
+
+	*CONFIG.lock().await = Some(config.clone());
 
 	// Wait for app
-	let app: Router = app().await?;
+	let app: Router = app(config).await?;
 
 	let string_addr: String = format!("{}:{}", SERVER_ADDR, SERVER_PORT);
 	let alt_addr: String = format!("localhost:{}", SERVER_PORT);
@@ -138,14 +148,33 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	let listener: TcpListener = TcpListener::bind(string_addr).await?;
 
 	axum::serve(listener, app).await?;
+	Ok(())
+}
 
-	info!("Shutting down...");
+async fn init_kering(keyring_service: &KeyringService) -> Result<(), Box<dyn Error + Send + Sync>> {
+	let secrets = [
+		("db.host", POSTGRES_HOST_DEF),
+		("db.port", POSTGRES_PORT_DEF),
+		("db.name", POSTGRES_NAME_DEF),
+		("db.user", POSTGRES_USER_DEF),
+		("db.password", POSTGRES_PASSWORD_DEF),
+	];
+
+	let hash: HashMap<&str, &str> = secrets.iter()
+		.cloned()
+		.collect();
+
+	for hashmap in hash {
+		keyring_service.set_secret(hashmap.0, hashmap.1).await?;
+	}
 
 	Ok(())
 }
 
-/// <p>Provides a database.</p>
-/// Note: This instance of this database IS asynchronous.
-pub async fn database() -> Result<Database, Box<dyn Error + Send + Sync>> {
-	Ok(database::database().await?)
+pub(crate) async fn database() -> Result<Database, Box<dyn Error + Send + Sync>> {
+	let config_guard: MutexGuard<Option<Config>> = CONFIG.lock().await;
+	let config: &Config = config_guard.as_ref().expect("Config not initialized");
+	let conn_str: &String = config.conn_str();
+	let result: Database = database::database(conn_str).await?;
+	Ok(result)
 }

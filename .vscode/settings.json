@@ -1,6 +1,0 @@
-{
-    "dart.flutterSdkPath": "~/libs/flutter",
-    "chat.tools.terminal.autoApprove": {
-        "cargo check": true
-    }
-}

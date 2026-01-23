@@ -24,52 +24,53 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub(crate) async fn user_api(database: Database) -> Router {
-    Router::new()
-        .route("/users", get(users))
-        .with_state(Arc::new(database.clone()))
-        .route("/users/search/{uuid}", get(search_user))
-        .with_state(Arc::new(database))
+	Router::new()
+		.route("/users", get(users))
+		.with_state(Arc::new(database.clone()))
+		.route("/users/search/{uuid}", get(search_user))
+		.with_state(Arc::new(database))
 }
 
 #[axum::debug_handler]
-async fn users(State(db): State<Arc<Database>>) -> Result<Json<HashMap<Uuid, String>>, (StatusCode, String)> {
-    let mut users: HashMap<Uuid, String> = HashMap::new();
+async fn users(
+	State(db): State<Arc<Database>>,
+) -> Result<Json<HashMap<Uuid, String>>, (StatusCode, String)> {
+	let mut users: HashMap<Uuid, String> = HashMap::new();
 
-    let rows = db
-        .select("accounts", &["uid", "username"], None, &[])
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+	let rows: Vec<tokio_postgres::Row> = db
+		.select("accounts", &["uid", "username"], None, &[])
+		.await
+		.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for row in rows {
-        let uid: Uuid = row.get(0);
-        let username: String = row.get(1);
+	for row in rows {
+		let uid: Uuid = row.get(0);
+		let username: String = row.get(1);
 
-        users.insert(uid, username);
-    }
+		users.insert(uid, username);
+	}
 
-    Ok(Json(users))
+	Ok(Json(users))
 }
 
 #[axum::debug_handler(state = Arc<Database>)]
 async fn search_user(
-    Path(uuid): Path<Uuid>,
-    State(db): State<Arc<Database>>,
+	Path(uuid): Path<Uuid>, State(db): State<Arc<Database>>,
 ) -> Result<Json<HashMap<Uuid, String>>, (StatusCode, String)> {
-    let mut users: HashMap<Uuid, String> = HashMap::new();
+	let mut users: HashMap<Uuid, String> = HashMap::new();
 
-    let rows = db
-        .select("accounts", &["uid", "username"], Some("uid = $1"), &[&uuid])
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+	let rows: Vec<tokio_postgres::Row> = db
+		.select("accounts", &["uid", "username"], Some("uid = $1"), &[&uuid])
+		.await
+		.map_err(|e: tokio_postgres::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for row in rows {
-        let uid: Uuid = row.get(0);
-        let username: String = row.get(1);
+	for row in rows {
+		let uid: Uuid = row.get(0);
+		let username: String = row.get(1);
 
-        if uuid == uid {
-            users.insert(uid, username);
-        }
-    }
+		if uuid == uid {
+			users.insert(uid, username);
+		}
+	}
 
-    Ok(Json(users))
+	Ok(Json(users))
 }

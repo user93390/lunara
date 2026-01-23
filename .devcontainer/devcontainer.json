@@ -4,19 +4,20 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "dev",
+  "runArgs": [
+    "--init",
+    "--privileged"
+  ],
   "customizations": {
     "jetbrains": {
       "backend": "RustRover",
       "plugins": [
-        "com.github.copilot"
+        "org.mvnsearch.plugins.justPlugin"
       ]
     },
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer",
-        "Dart-Code.dart-code",
-        "Dart-Code.flutter",
-        "fill-labs.dependi",
         "skellock.just",
         "tamasfe.even-better-toml"
       ]

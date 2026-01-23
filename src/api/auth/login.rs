@@ -14,41 +14,41 @@
  * limitations under the License.
  */
 
-use crate::database::database;
+use crate::database;
+use crate::database::Database;
 use axum::extract::Path;
 use log::warn;
+use tokio_postgres::Row;
 use uuid::Uuid;
 
 pub(crate) async fn try_login(Path((username, password)): Path<(String, String)>) -> Option<Uuid> {
-    let db = database().await.ok()?;
+	let db: Database = database().await.ok()?;
 
-    let rows = db
-        .select("accounts", &["uid"], Some("username = $1"), &[&username])
-        .await
-        .ok()?;
+	let rows: Vec<Row> = db
+		.select("accounts", &["uid"], Some("username = $1"), &[&username])
+		.await
+		.ok()?;
 
-    let row = match rows.first() {
-        Some(r) => r,
-        None => {
-            warn!("Cannot find uuid inside row.");
-            return None;
-        }
-    };
+	let row = match rows.first() {
+		Some(r) => r,
+		None => {
+			warn!("Cannot find uuid inside row.");
+			return None;
+		}
+	};
 
-    let uuid: Uuid = row.get(0);
+	let uuid: Uuid = row.get(0);
 
-    let password_row = db
-        .select_one("accounts", &["password"], "uid = $1", &[&uuid])
-        .await
-        .ok()?;
+	let password_row: Row = db
+		.select_one("accounts", &["password"], "uid = $1", &[&uuid])
+		.await
+		.ok()?;
 
-    let valid = password_row
-        .get::<usize, String>(0)
-        .eq(&password);
+	let valid: bool = password_row.get::<usize, String>(0).eq(&password);
 
-    if !valid {
-        return None;
-    }
+	if !valid {
+		return None;
+	}
 
-    Some(uuid)
+	Some(uuid)
 }

@@ -1,9 +1,8 @@
 #### Good-To-Knows
 
-IDE: RustRover by JetBrains
 Language: Rust
-Framework: Axum + Fluttger
-Operating System (OS): Ubuntu 24.0
+Framework: Axum
+Operating System (OS): Alpine Linux
 Architecture: x86_64
 
 # Prompting

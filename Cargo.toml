@@ -5,7 +5,7 @@ license = "Apache-2.0"
 version = "1.0.0"
 name = "Lunara"
 edition = "2024"
-rust-version = "1.93.0"
+rust-version = "1.92.0"
 
 [dependencies]
 sea-orm = { version = "1.1.19", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }

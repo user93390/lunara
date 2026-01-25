@@ -20,11 +20,11 @@ mod config;
 mod database;
 mod entity;
 mod keyring;
-mod routes;
+mod route;
 
 use crate::{
 	database::Database,
-	routes::{api_route, auth_route},
+	route::{api_route, auth_route},
 };
 use std::collections::HashMap;
 

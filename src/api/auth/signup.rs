@@ -23,10 +23,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub(crate) async fn create_account(
-	State(db): State<Arc<Database>>,
-	Path((uuid, username, password)): Path<(Uuid, String, String)>,
+	State(db): State<Arc<Database>>, Path((uuid, username, password)): Path<(Uuid, String, String)>,
 ) -> Result<StatusCode, StatusCode> {
-
 	let new_account = ActiveModel {
 		uid: Set(uuid),
 		username: Set(username),

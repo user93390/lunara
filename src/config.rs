@@ -58,7 +58,9 @@ impl Config {
 		self
 	}
 
-	pub(crate) async fn get_from_toml(&self) -> Result<Option<Config>, Box<dyn Error + Send + Sync>> {
+	pub(crate) async fn get_from_toml(
+		&self,
+	) -> Result<Option<Config>, Box<dyn Error + Send + Sync>> {
 		let path: &Path = Path::new(&self.config_path);
 
 		let mut file: File = File::open(path).await?;

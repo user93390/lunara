@@ -24,10 +24,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub(crate) async fn try_login(
-	State(db): State<Arc<Database>>,
-	Path((username, password)): Path<(String, String)>,
+	State(db): State<Arc<Database>>, Path((username, password)): Path<(String, String)>,
 ) -> Option<Uuid> {
-
 	let account = Entity::find()
 		.filter(Column::Username.eq(&username))
 		.one(db.conn())

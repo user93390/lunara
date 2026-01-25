@@ -35,6 +35,7 @@ use axum::Router;
 
 use axum::routing::get;
 use log::{error, info, warn, LevelFilter};
+use std::convert::TryInto;
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
@@ -52,7 +53,7 @@ const POSTGRES_USER_DEF: &str = "postgres";
 const POSTGRES_PASSWORD_DEF: &str = "postgres";
 
 pub struct App {
-	config: Config
+	config: Config,
 }
 impl App {
 	/// <p>Create an asynchronous router.</p>
@@ -77,7 +78,9 @@ impl App {
 			.nest("/api", api_route))
 	}
 
-	pub async fn init_kering(keyring_service: &KeyringService) -> Result<(), Box<dyn Error + Send + Sync>> {
+	pub async fn init_kering(
+		keyring_service: &KeyringService,
+	) -> Result<(), Box<dyn Error + Send + Sync>> {
 		let secrets = [
 			("db.host", POSTGRES_HOST_DEF),
 			("db.port", POSTGRES_PORT_DEF),
@@ -96,7 +99,6 @@ impl App {
 	}
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	let config_path = Path::new("config.toml");
@@ -107,9 +109,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	let toml_result = Config::default().get_from_toml().await;
 
-
 	if let Err(ref e) = toml_result {
-	   error!("Config error: {:?}", e);
+		error!("Config error: {:?}", e);
 	};
 
 	let mut config: Config = toml_result?.unwrap();
@@ -125,10 +126,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	info!("Running Lunara.");
 
 	let keyring_service: KeyringService = KeyringService::new("Lunara");
-
-
 	let key: bool = keyring_service.secret_exists("key").await;
-
 	let first_time: bool = !key;
 
 	if first_time {
@@ -143,7 +141,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 		config.with_key(new_key);
 	}
-
 	App::init_kering(&keyring_service).await?;
 
 	let key = keyring_service.get_secret("key").await?;
@@ -159,10 +156,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		user, password, host, port, name
 	);
 
-	let arr: [u8; 32] = *hex::decode(key)
-		.expect("Bad key")
-		.as_array()
-		.expect("Bad array value.");
+	let vec = hex::decode(key)?;
+
+	let arr = conv_vec_arr(vec);
 
 	config
 		.with_key(arr)
@@ -170,7 +166,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		.with_conn_str(connection_string.clone());
 
 	let app: App = App {
-		config: config.clone()
+		config: config.clone(),
 	};
 
 	// Wait for app
@@ -186,9 +182,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	let listener: TcpListener = TcpListener::bind(string_addr).await?;
 
-	config.write_toml()
-		.await
-		.expect("Error writing toml");
+	config.write_toml().await.expect("Error writing toml");
 	axum::serve(listener, app).await?;
 	Ok(())
 }
+
+fn conv_vec_arr<T, const N: usize>(v: Vec<T>) -> [T; N] {
+	v.try_into()
+		.unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
+}
+

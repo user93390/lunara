@@ -17,10 +17,10 @@
 use crate::api::auth::login::try_login;
 use crate::api::auth::signup::create_account;
 use crate::database::Database;
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::get;
-use axum::Router;
 use log::info;
 use std::sync::Arc;
 
@@ -45,8 +45,7 @@ async fn signup_handler(
 }
 
 async fn login_handler(
-	State(db): State<Arc<Database>>,
-	Path((username, password)): Path<(String, String)>,
+	State(db): State<Arc<Database>>, Path((username, password)): Path<(String, String)>,
 ) -> Result<StatusCode, StatusCode> {
 	let uuid = try_login(State(db), Path((username, password)))
 		.await

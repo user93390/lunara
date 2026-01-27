@@ -3,7 +3,7 @@ FROM rust:alpine
 ENV USER_ID=1000
 ENV GROUP_ID=1000
 ENV USER_NAME=lunara-developer
-ENV GROUP_NAME=dev
+ENV GROUP_NAME=lunara-developer
 
 ENV PROJECT_PATH=/home/lunara-developer/lunara
 

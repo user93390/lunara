@@ -14,7 +14,7 @@ tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread", "macros", "fs
 axum = { version = "0.8.8", features = ["macros"] }
 serde = { version = "1.0.2", features = ["derive"] }
 
-uuid = { version = "1.19.0", features = ["v4", "serde"] }
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
 log = "0.4.29"
 env_logger = "0.11.8"
 hex = "0.4.3"

@@ -1,9 +1,7 @@
 #### Good-To-Knows
 
 Language: Rust
-Framework: Axum
-Operating System (OS): Alpine Linux
-Architecture: x86_64
+Framework: Axum + React
 
 # Prompting
 

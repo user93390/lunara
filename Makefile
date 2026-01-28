@@ -8,10 +8,24 @@ build: clean
 	# Build backend
 	cargo build --release
 
+build_min: clean_min
+	# Build frontend
+	cd web && pnpm install && pnpm run build
+	rm -rf static && mkdir -p static
+	cp -r web/dist/* static/
+	# Build backend
+	cargo build --release
+
 check:
 	cargo check --release
 
 clean: dock_stop
+	cargo clean --release
+	rm -rf static
+	rm -rf web/dist
+	rm -rf web/node_modules
+
+clean_min:
 	cargo clean --release
 	rm -rf static
 	rm -rf web/dist

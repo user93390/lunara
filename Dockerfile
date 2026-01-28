@@ -2,30 +2,28 @@ FROM rust:alpine AS builder
 
 WORKDIR /app
 
-ENV CI=true
-
 COPY init.sql /docker-entrypoint-initdb.d/init.sql
+
+ENV CI=true
 
 RUN apk add --no-cache nodejs npm
 RUN npm install -g pnpm
 
-COPY web ./web
-RUN cd web && pnpm install && pnpm run build
-RUN mkdir -p static && cp -r web/dist/* static/
+RUN apk add make
 
-COPY Cargo.toml ./
-COPY src ./src
-COPY static ./static
+COPY . .
 
-RUN cargo install --path . --root /build
+RUN make build_min
 
 FROM alpine:latest
 
 WORKDIR /app
 
+# Linux keyring.
 RUN apk add --no-cache keyutils
 
-COPY --from=builder /build/bin/Lunara /usr/local/bin/Lunara
+COPY --from=builder /app/target/release/Lunara /usr/local/bin/Lunara
 COPY --from=builder /app/static /app/static
 
+# Start keyring session.
 CMD sh -c "keyctl session && Lunara"

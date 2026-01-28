@@ -56,7 +56,6 @@ use tokio::{
 	fs::File,
 	net::TcpListener,
 };
-use tracing_subscriber::EnvFilter;
 
 const SERVER_ADDR: &str = "0.0.0.0";
 const SERVER_PORT: u16 = 5000;

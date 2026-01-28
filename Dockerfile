@@ -6,6 +6,7 @@ COPY init.sql /docker-entrypoint-initdb.d/init.sql
 
 COPY Cargo.toml ./
 COPY src ./src
+COPY static ./static
 
 RUN cargo install --path . --root /build
 
@@ -16,5 +17,6 @@ WORKDIR /app
 RUN apk add --no-cache keyutils
 
 COPY --from=builder /build/bin/Lunara /usr/local/bin/Lunara
+COPY --from=builder /app/static ./static
 
 CMD sh -c "keyctl session && Lunara"

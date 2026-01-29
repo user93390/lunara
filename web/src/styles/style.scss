@@ -1,0 +1,11 @@
+$foreground-colour: rgb(255, 255, 255);
+
+$background-colour: rgb(30, 30, 30);
+
+$widget-colour: rgb(36, 157, 255);
+$widget-disable-colour: rgba(36, 157, 255, 0.5);
+
+body {
+  background-color: $background-colour;
+  color: $foreground-colour;
+}

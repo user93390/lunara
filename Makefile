@@ -1,5 +1,11 @@
 .PHONY: build check clean dock_init dock_compose kill_force dock_stop dock_auto build_all
 
+
+build_react:
+	cd web && pnpm install && pnpm run build
+	rm -rf static && mkdir -p static
+	cp -r web/dist/* static/
+
 build: clean
 	# Build frontend
 	cd web && pnpm install && pnpm run build

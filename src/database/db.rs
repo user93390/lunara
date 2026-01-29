@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+use log::{info, warn};
 use sea_orm::{Database as SeaDatabase, DatabaseConnection, DbErr};
 
 #[derive(Clone)]
@@ -23,8 +23,20 @@ pub struct Database {
 
 impl Database {
 	pub async fn connect(conn_str: &str) -> Result<Self, DbErr> {
-		let conn = SeaDatabase::connect(conn_str).await?;
-		Ok(Self { conn })
+		let db_conn:Result<DatabaseConnection, DbErr> = SeaDatabase::connect(conn_str).await;
+		
+		match db_conn {
+			Ok(_) => {
+				info!("Address fond!")
+			}
+			Err(_) => {
+				warn!("Database hasn't started yet or doesn't exist.")
+			}
+		}
+		
+		Ok(Self { 
+			conn: db_conn?
+		})
 	}
 
 	pub fn conn(&self) -> &DatabaseConnection {

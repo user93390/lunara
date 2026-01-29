@@ -1,8 +1,13 @@
+use warnings FATAL => 'all';
+use strict;
+
+
 my @packages = (
     "make",
     "docker",
     "git",
-    "rustup"
+    "rustup",
+    "pnpm",
 );
 
 my @optional_packages = (
@@ -10,6 +15,8 @@ my @optional_packages = (
     "helix",
 );
 
+
+# Change if you want.
 my $optional = 1;
 
 sub install_required {

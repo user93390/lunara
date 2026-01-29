@@ -45,12 +45,7 @@ use log::{
 };
 
 use crate::route::servers::server_api;
-use std::{
-	convert::TryInto,
-	error::Error,
-	path::Path,
-	sync::Arc,
-};
+use std::{convert::TryInto, error::Error, path::Path, sync::Arc};
 use axum::routing::get;
 use tokio::{
 	fs::File,
@@ -92,12 +87,13 @@ impl App {
 			.append_index_html_on_directories(true)
 			.not_found_service(ServeFile::new("static/index.html"));
 
-		Ok(Router::new()
-			.route("/health", get("Healthy!"))
-			.nest("/auth/v1", auth_route)
-			.nest("/api", api_route)
-			.nest("/api", server_api)
-			.fallback_service(serve_dir)
+		Ok(
+			Router::new()
+				.route("/health", get("Healthy!"))
+				.nest("/auth/v1", auth_route)
+				.nest("/api", api_route)
+				.nest("/api", server_api)
+				.fallback_service(serve_dir)
 		)
 	}
 
@@ -190,8 +186,24 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		config: config.clone(),
 	};
 
-	// Wait for app
-	let app: Router = app.start().await?;
+	let app: Router = match app.start().await {
+		Ok(router) => {
+			info!("Database connected successfully");
+			router
+		}
+		Err(e) => {
+			error!("Failed to connect to database: {}", e);
+			warn!("Starting server in degraded mode. Database-dependent routes will fail.");
+			
+			let serve_dir = ServeDir::new("static")
+				.append_index_html_on_directories(true)
+				.not_found_service(ServeFile::new("static/index.html"));
+
+			Router::new()
+				.route("/health", get("Healthy (degraded mode - no database)"))
+				.fallback_service(serve_dir)
+		}
+	};
 
 	let string_addr: String = format!("{}:{}", SERVER_ADDR, SERVER_PORT);
 	let alt_addr: String = format!("localhost:{}", SERVER_PORT);
@@ -203,7 +215,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	let listener: TcpListener = TcpListener::bind(string_addr).await?;
 
-	config.write_toml().await.expect("Error writing toml");
+	config.write_toml().await?;
 	axum::serve(listener, app).await?;
 	Ok(())
 }

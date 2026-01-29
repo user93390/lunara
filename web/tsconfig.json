@@ -8,12 +8,13 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noUnusedParameters": true,
     "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
   }
 }

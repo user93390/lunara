@@ -44,7 +44,7 @@
 `make build_all`
 
 # Docker configuration
-Build docker image using `make dock_init` \
+Build docker image using `make dock_init` 
 Run docker by using `make dock_compose` \
 
 Automake all the above by using `make dock_auto`

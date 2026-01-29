@@ -1,13 +1,12 @@
 use warnings FATAL => 'all';
 use strict;
 
-
 my @packages = (
     "make",
     "docker",
     "git",
     "rustup",
-    "pnpm",
+    "unzip"
 );
 
 my @optional_packages = (
@@ -21,6 +20,9 @@ my $optional = 1;
 
 sub install_required {
     print("Installing packages...\n");
+
+
+    system("curl -fsSL https://bun.com/install | bash");
 
     for my $package (@packages) {
         install($package);

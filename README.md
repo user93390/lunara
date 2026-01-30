@@ -28,13 +28,13 @@
 - <p>Improved authentication.</p>
 - <p>God tier level dashboard</p>
 
-# Building.
+# Building Locally.
 >  You must have
 >  - git
 >  - cargo
 >  - rust
 >  - make
->  - pnpm
+>  - bun
 >  - Configured ssh with git
 
 <p>Open your terminal of choice and enter</p>

@@ -13,6 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+use crate::api::auth::login::LoginAuth;
+use crate::api::auth::signup::SignupAuth;
+use axum::http::StatusCode;
+use std::error::Error;
 
 pub(crate) mod login;
 pub(crate) mod signup;
+
+pub trait Authentication {
+	async fn await_login(
+		&self, auth: LoginAuth,
+	) -> Result<StatusCode, Box<dyn Error + Sync + Send>>;
+
+	async fn await_signup(
+		&self, auth: SignupAuth,
+	) -> Result<StatusCode, Box<dyn Error + Sync + Send>>;
+}

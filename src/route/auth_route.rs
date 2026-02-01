@@ -95,29 +95,52 @@ async fn login(
 
 	info!("Authenticating for {}", login.uuid);
 
-	let account: Model = Entity::find()
+	let account = match Entity::find()
 		.filter(Column::Uid.eq(login.uuid))
 		.one(db.conn())
 		.await
-		.ok()
-		.unwrap()
-		.unwrap();
+	{
+		Ok(Some(acc)) => acc,
+		Ok(None) => {
+			warn!("Account not found for UUID: {}", login.uuid);
+			return Response::builder()
+				.status(StatusCode::UNAUTHORIZED)
+				.body(Body::from("Authentication failed."))
+				.unwrap_or_else(|_| Response::new(Body::from("Authentication failed.")));
+		}
+		Err(e) => {
+			warn!("Database error during account lookup: {}", e);
+			return Response::builder()
+				.status(StatusCode::INTERNAL_SERVER_ERROR)
+				.body(Body::from("Internal server error."))
+				.unwrap_or_else(|_| Response::new(Body::from("Internal server error.")));
+		}
+	};
 
-	let password_str = &String::from_utf8(login.password.clone()).unwrap();
+	let password_str = match String::from_utf8(login.password.clone()) {
+		Ok(s) => s,
+		Err(_) => {
+			warn!("Invalid UTF-8 in password for UUID: {}", login.uuid);
+			return Response::builder()
+				.status(StatusCode::BAD_REQUEST)
+				.body(Body::from("Invalid password format."))
+				.unwrap_or_else(|_| Response::new(Body::from("Invalid password format.")));
+		}
+	};
 
-	if account.password.eq(password_str) {
+	if account.password.eq(&password_str) {
 		info!("Authorized.");
 
 		return Response::builder()
 			.status(StatusCode::ACCEPTED)
 			.body(Body::from("Logged in!"))
-			.unwrap();
+			.unwrap_or_else(|_| Response::new(Body::from("Logged in!")));
 	}
 
 	warn!("Bad credentials.");
 
 	Response::builder()
-		.status(StatusCode::NOT_ACCEPTABLE)
-		.body(Body::from("Invalid credentials."))
-		.unwrap()
+		.status(StatusCode::UNAUTHORIZED)
+		.body(Body::from("Authentication failed."))
+		.unwrap_or_else(|_| Response::new(Body::from("Authentication failed.")))
 }

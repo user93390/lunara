@@ -99,13 +99,27 @@ async fn login(
 
 	info!("Authenticating for {}", login.uuid);
 
-	let account: Model = Entity::find()
+	let account = match Entity::find()
 		.filter(Column::Uid.eq(login.uuid))
 		.one(db.conn())
 		.await
-		.ok()
-		.unwrap()
-		.unwrap();
+	{
+		Ok(Some(acc)) => acc,
+		Ok(None) => {
+			warn!("Account not found for UUID: {}", login.uuid);
+			return Response::builder()
+				.status(StatusCode::NOT_FOUND)
+				.body(Body::from("Account not found."))
+				.unwrap();
+		}
+		Err(e) => {
+			warn!("Database error during account lookup: {}", e);
+			return Response::builder()
+				.status(StatusCode::INTERNAL_SERVER_ERROR)
+				.body(Body::from("Internal server error."))
+				.unwrap();
+		}
+	};
 
 	let password_str = &String::from_utf8(login.password.clone()).unwrap();
 

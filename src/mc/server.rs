@@ -87,3 +87,103 @@ impl MinecraftServer {
 		self
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn new_server_has_defaults() {
+		let server = MinecraftServer::new();
+
+		assert!(matches!(server.brand(), ServerBrand::Vanilla));
+		assert_eq!(server.version(), "NaN");
+		assert!(server.name().is_none());
+		assert!(server.plugins().is_none());
+	}
+
+	#[test]
+	fn server_builder_with_name() {
+		let mut server = MinecraftServer::new();
+		server.with_name(Some(String::from("TestServer")));
+
+		assert_eq!(server.name(), Some(&String::from("TestServer")));
+	}
+
+	#[test]
+	fn server_builder_with_brand() {
+		let mut server = MinecraftServer::new();
+		server.with_brand(ServerBrand::Paper);
+
+		assert!(matches!(server.brand(), ServerBrand::Paper));
+	}
+
+	#[test]
+	fn server_builder_with_version() {
+		let mut server = MinecraftServer::new();
+		server.with_version(BuildInfo {
+			version: String::from("1.20.4"),
+		});
+
+		assert_eq!(server.version(), "1.20.4");
+	}
+
+	#[test]
+	fn server_builder_chain() {
+		let mut server = MinecraftServer::new();
+		server
+			.with_name(Some(String::from("ChainTest")))
+			.with_brand(ServerBrand::Paper)
+			.with_version(BuildInfo {
+				version: String::from("1.19.2"),
+			});
+
+		assert_eq!(server.name(), Some(&String::from("ChainTest")));
+		assert!(matches!(server.brand(), ServerBrand::Paper));
+		assert_eq!(server.version(), "1.19.2");
+	}
+
+	#[test]
+	fn server_build_returns_self() {
+		let server = MinecraftServer::new();
+		let built = server.build();
+
+		assert_eq!(built.version(), server.version());
+	}
+
+	#[test]
+	fn build_info_version() {
+		let mut server = MinecraftServer::new();
+		server.with_version(BuildInfo {
+			version: String::from("1.21"),
+		});
+
+		assert_eq!(server.build_info().version, "1.21");
+	}
+
+	#[test]
+	fn server_serialize_deserialize() {
+		let mut server = MinecraftServer::new();
+		server
+			.with_name(Some(String::from("SerdeServer")))
+			.with_brand(ServerBrand::Paper)
+			.with_version(BuildInfo {
+				version: String::from("1.20.1"),
+			});
+
+		let json = serde_json::to_string(&server).unwrap();
+		let deserialized: MinecraftServer = serde_json::from_str(&json).unwrap();
+
+		assert_eq!(deserialized.name(), server.name());
+		assert_eq!(deserialized.version(), server.version());
+	}
+
+	#[test]
+	fn server_brand_debug() {
+		let vanilla = ServerBrand::Vanilla;
+		let paper = ServerBrand::Paper;
+
+		assert_eq!(format!("{:?}", vanilla), "Vanilla");
+		assert_eq!(format!("{:?}", paper), "Paper");
+	}
+}

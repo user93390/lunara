@@ -110,3 +110,97 @@ async fn delete_server(Path(name): Path<String>) {
 
 	todo!()
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use axum::body::Body;
+	use axum::http::{Request, StatusCode};
+	use axum::response::Response;
+	use tower::ServiceExt;
+
+	#[tokio::test]
+	async fn mc_route_has_trending_plugins_route() {
+		let app = mc_route();
+
+		let response: Response = app
+			.oneshot(
+				Request::builder()
+					.uri("/plugin/trending")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_ne!(response.status(), StatusCode::NOT_FOUND);
+	}
+
+	#[tokio::test]
+	async fn mc_route_has_server_list_route() {
+		let app = mc_route();
+
+		let response: Response = app
+			.oneshot(
+				Request::builder()
+					.uri("/server/list")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_ne!(response.status(), StatusCode::NOT_FOUND);
+	}
+
+	#[tokio::test]
+	async fn mc_route_has_create_server_route() {
+		let app = mc_route();
+
+		let response: Response = app
+			.oneshot(
+				Request::builder()
+					.uri("/server/create/Paper/testserver/1.20.4")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_ne!(response.status(), StatusCode::NOT_FOUND);
+	}
+
+	#[tokio::test]
+	async fn mc_route_returns_404_for_unknown_route() {
+		let app = mc_route();
+
+		let response: Response = app
+			.oneshot(
+				Request::builder()
+					.uri("/nonexistent")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_eq!(response.status(), StatusCode::NOT_FOUND);
+	}
+
+	#[tokio::test]
+	async fn trending_plugins_accepts_query_param() {
+		let app = mc_route();
+
+		let response: Response = app
+			.oneshot(
+				Request::builder()
+					.uri("/plugin/trending?trending=2")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+
+		assert_ne!(response.status(), StatusCode::NOT_FOUND);
+	}
+}

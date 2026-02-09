@@ -143,3 +143,91 @@ async fn login(
 		.body(Body::from("Authentication failed."))
 		.unwrap_or_else(|_| Response::new(Body::from("Authentication failed.")))
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use axum::body::Body;
+	use axum::http::{Request, StatusCode};
+	use axum::response::Response;
+	use base64::{Engine, alphabet, engine::GeneralPurpose, engine::general_purpose};
+	use tower::ServiceExt;
+
+	fn encode_base64(input: &str) -> String {
+		GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD).encode(input)
+	}
+
+	#[tokio::test]
+	async fn auth_api_router_has_signup_route() {
+		let db = mock_database().await;
+
+		if let Some(db) = db {
+			let app = auth_api(db).await;
+			let uuid = encode_base64(&Uuid::new_v4().to_string());
+			let username = encode_base64("testuser");
+			let password = encode_base64("testpass");
+
+			let response: Response = app
+				.oneshot(
+					Request::builder()
+						.uri(&format!("/signup/{}/{}/{}", uuid, username, password))
+						.body(Body::empty())
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+
+			assert_ne!(response.status(), StatusCode::NOT_FOUND);
+		}
+	}
+
+	#[tokio::test]
+	async fn auth_api_router_has_login_route() {
+		let db = mock_database().await;
+
+		if let Some(db) = db {
+			let app = auth_api(db).await;
+			let username = encode_base64(&Uuid::new_v4().to_string());
+			let password = encode_base64("testpass");
+
+			let response: Response = app
+				.oneshot(
+					Request::builder()
+						.uri(&format!("/login/{}/{}", username, password))
+						.body(Body::empty())
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+
+			assert_ne!(response.status(), StatusCode::NOT_FOUND);
+		}
+	}
+
+	#[tokio::test]
+	async fn auth_api_returns_404_for_unknown_route() {
+		let db = mock_database().await;
+
+		if let Some(db) = db {
+			let app = auth_api(db).await;
+
+			let response: Response = app
+				.oneshot(
+					Request::builder()
+						.uri("/nonexistent")
+						.body(Body::empty())
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+
+			assert_eq!(response.status(), StatusCode::NOT_FOUND);
+		}
+	}
+
+	async fn mock_database() -> Option<crate::database::Database> {
+		crate::database::Database::connect("postgres://postgres:postgres@localhost:5432/lunara")
+			.await
+			.ok()
+	}
+}

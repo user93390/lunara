@@ -30,3 +30,61 @@ impl Plugin {
 		)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn plugin_download_url_format() {
+		let plugin = Plugin {
+			name: String::from("TestPlugin"),
+			version: String::from("1.0.0"),
+		};
+
+		let url = plugin.download();
+
+		assert_eq!(
+			url,
+			"https://hangar.papermc.io/api/v1/projects/TestPlugin/versions/1.0.0/PAPER/download"
+		);
+	}
+
+	#[test]
+	fn plugin_download_url_with_special_characters() {
+		let plugin = Plugin {
+			name: String::from("My-Plugin"),
+			version: String::from("2.1.3-SNAPSHOT"),
+		};
+
+		let url = plugin.download();
+
+		assert!(url.contains("My-Plugin"));
+		assert!(url.contains("2.1.3-SNAPSHOT"));
+	}
+
+	#[test]
+	fn plugin_clone() {
+		let plugin = Plugin {
+			name: String::from("CloneTest"),
+			version: String::from("1.0"),
+		};
+
+		let cloned = plugin.clone();
+
+		assert_eq!(plugin.download(), cloned.download());
+	}
+
+	#[test]
+	fn plugin_serialize_deserialize() {
+		let plugin = Plugin {
+			name: String::from("SerdePlugin"),
+			version: String::from("3.2.1"),
+		};
+
+		let json = serde_json::to_string(&plugin).unwrap();
+		let deserialized: Plugin = serde_json::from_str(&json).unwrap();
+
+		assert_eq!(plugin.download(), deserialized.download());
+	}
+}

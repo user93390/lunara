@@ -1,4 +1,4 @@
-![image](https://github.com/user93390/Lunara/blob/master/Lunara.svg)
+[image](https://github.com/user93390/Lunara/blob/master/Lunara.svg)
 
 > Note that Lunara is still in heavy development.
 
@@ -37,14 +37,25 @@
 >  - bun
 >  - Configured ssh with git
 
-<p>Open your terminal of choice and enter</p>
+<p>Open your terminal of choice and enter:</p>
 
-`git clone git@github.com:user93390/Lunara.git` \
-`cd Lunara` \
-`make build_all`
+```bash
+git clone git@github.com:user93390/lunara.git && cd lunara
 
-# Docker configuration
-Build docker image using `make dock_init` 
-Run docker by using `make dock_compose` \
+make build_all
+```
 
-Automake all the above by using `make dock_auto`
+# Docker Guide
+> [!NOTE]
+> Use the above steps to build, you must build the application before using docker.
+
+<p>Build docker by using make with the following:</p>
+
+```bash
+make dock_init
+```
+<p>Then run the following command to initilize the containers:</p>
+
+```bash
+make dock_compose
+```

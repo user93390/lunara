@@ -1,3 +1,9 @@
+# Core Philosophy
+- **Minimalist Communication:** Use clear, concise, lower-case-friendly text. No fluff.
+- **Lean Code:** No boilerplate docs, no `unwrap()`, no unnecessary `mut`.
+- **Safety First:** If it doesn't pass `clippy`, don't suggest it.
+- **Atomic Changes:** One fix at a time. Run `cargo check` after every logic change.
+
 #### Good-To-Knows
 Language: Rust
 Framework: Axum + React

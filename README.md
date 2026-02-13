@@ -4,6 +4,7 @@
 
 # Technologies Used
 
+![Codecov](https://img.shields.io/badge/Codecov-F01F7A?logo=codecov&logoColor=fff)
 ![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white) \
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white) \
 ![Licence](https://img.shields.io/badge/Apache--2.0-green?style=for-the-badge) \

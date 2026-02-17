@@ -23,7 +23,15 @@ pub struct Plugin {
 }
 
 impl Plugin {
-	pub fn download(&self) -> String {
+	pub fn new(name: String, version: String) -> Self {
+		Self { name, version }
+	}
+
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+
+	pub fn download_url(&self) -> String {
 		format!(
 			"https://hangar.papermc.io/api/v1/projects/{}/versions/{}/PAPER/download",
 			self.name, self.version
@@ -42,7 +50,7 @@ mod tests {
 			version: String::from("1.0.0"),
 		};
 
-		let url = plugin.download();
+		let url = plugin.download_url();
 
 		assert_eq!(
 			url,
@@ -57,7 +65,7 @@ mod tests {
 			version: String::from("2.1.3-SNAPSHOT"),
 		};
 
-		let url = plugin.download();
+		let url = plugin.download_url();
 
 		assert!(url.contains("My-Plugin"));
 		assert!(url.contains("2.1.3-SNAPSHOT"));
@@ -72,7 +80,7 @@ mod tests {
 
 		let cloned = plugin.clone();
 
-		assert_eq!(plugin.download(), cloned.download());
+		assert_eq!(plugin.download_url(), cloned.download_url());
 	}
 
 	#[test]
@@ -85,6 +93,6 @@ mod tests {
 		let json = serde_json::to_string(&plugin).unwrap();
 		let deserialized: Plugin = serde_json::from_str(&json).unwrap();
 
-		assert_eq!(plugin.download(), deserialized.download());
+		assert_eq!(plugin.download_url(), deserialized.download_url());
 	}
 }

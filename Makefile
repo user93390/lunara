@@ -1,4 +1,4 @@
-.PHONY: build check clean dock_init dock_compose kill_force dock_stop dock_auto build_all
+.PHONY: build test clean dock_init dock_compose kill_force dock_stop dock_auto build_all
 
 
 build_react:
@@ -8,15 +8,14 @@ build_react:
 
 
 build: clean
-	# Build frontend
 	cd web && bun install && bun run build
 	rm -rf static && mkdir -p static
 	cp -r web/dist/* static/
-	# Build backend
 	cargo build --release
 
-check:
+test:
 	cargo check --release
+	cargo test --release
 
 clean:
 	cargo clean --release

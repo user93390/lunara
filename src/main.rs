@@ -92,7 +92,7 @@ impl App {
 			.fallback_service(serve_dir))
 	}
 
-	pub async fn init_kering(
+	pub async fn init_keyring(
 		keyring_service: &KeyringService,
 	) -> Result<(), Box<dyn Error + Send + Sync>> {
 		let secrets = [
@@ -138,7 +138,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	env_logger::builder()
 		.format_timestamp_secs()
 		.format_level(true)
-		.filter_level(LevelFilter::Info)
+		.filter_level(LevelFilter::Debug)
 		.filter_module("sqlx::query", LevelFilter::Warn)
 		.init();
 
@@ -169,7 +169,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	info!("Init keyring secrets...");
 
-	App::init_kering(&keyring_service).await?;
+	App::init_keyring(&keyring_service).await?;
 
 	let key = keyring_service.get_secret("key").await?;
 
@@ -191,7 +191,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	config
 		.with_key(arr)
-		.with_conn_str(connection_string.clone());
+		.with_conn_str(connection_string.clone())
+		.with_port(SERVER_PORT);
 
 	let app: App = App {
 		config: config.clone(),
@@ -202,6 +203,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 			info!("Database connected successfully");
 			router
 		}
+
 		Err(e) => {
 			let mc_route: Router<_> = mc_route();
 
@@ -237,6 +239,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	Ok(())
 }
 
+/// <p>Converts a vector array into an array.</p>
+/// <p>It's very dangerous due to it using panic logic.</p>
+/// <p>note: Ensure you pass the right size</p>
 fn conv_vec_arr<T, const V: usize>(v: Vec<T>) -> [T; V] {
 	v.try_into()
 		.unwrap_or_else(|_| panic!("Expected vec of length {}", V))

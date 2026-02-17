@@ -15,12 +15,14 @@ const CONF_LOCATION: &str = "config.toml";
 pub(crate) struct Config {
 	keyring_key: [u8; 32],
 	connection_string: String,
+	port: u16,
 }
 impl Config {
 	pub(crate) fn default() -> Self {
 		Self {
 			keyring_key: [0u8; 32],
 			connection_string: "NaN".to_string(),
+			port: 5050,
 		}
 	}
 
@@ -34,6 +36,11 @@ impl Config {
 
 	pub(crate) fn with_key(&mut self, key: [u8; 32]) -> &mut Self {
 		self.keyring_key = key;
+		self
+	}
+
+	pub(crate) fn with_port(&mut self, port: u16) -> &mut Self {
+		self.port = port;
 		self
 	}
 

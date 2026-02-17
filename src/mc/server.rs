@@ -15,9 +15,16 @@ limitations under the License.
 
 */
 use crate::mc::plugin::Plugin;
+use log::info;
+use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::fs::File;
+use std::io::Write;
+use tokio::fs::{create_dir_all, read_to_string, remove_dir_all};
+use tokio::process::Command;
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Clone, Serialize, Eq, PartialEq)]
 pub enum ServerBrand {
 	Vanilla,
 	Paper,
@@ -34,7 +41,11 @@ pub struct MinecraftServer {
 	build: BuildInfo,
 	name: Option<String>,
 	plugins: Option<Vec<Plugin>>,
+	#[serde(skip)]
+	log_cache: Option<String>,
 }
+
+pub(crate) const PARENT_PATH: &str = "/app/servers";
 
 impl MinecraftServer {
 	pub(crate) fn new() -> Self {
@@ -45,7 +56,68 @@ impl MinecraftServer {
 			},
 			name: None,
 			plugins: None,
+			log_cache: None,
 		}
+	}
+	pub(crate) async fn add_plugin(
+		&self,
+		plugin: &Plugin,
+	) -> Result<(), Box<dyn Error + Sync + Send>> {
+		let plugins_dir = format!("{}/plugins", self.directory());
+		create_dir_all(&plugins_dir).await?;
+
+		let url: String = plugin.download_url();
+		let dest: String = format!("{}/{}.jar", plugins_dir, plugin.name());
+
+		let response: Response = Client::new().get(&url).send().await?;
+		let bytes = response.bytes().await?;
+
+		let mut file: File = File::create(&dest)?;
+		file.write_all(&bytes)?;
+
+		info!("Plugin downloaded to {}", dest);
+		Ok(())
+	}
+
+	pub(crate) async fn turn_on(&self) -> Result<(), Box<dyn Error + Sync + Send>> {
+		Command::new("java")
+			.arg("-jar")
+			.arg(format!("{}.jar", self.name()))
+			.current_dir(self.directory())
+			.spawn()?;
+
+		Ok(())
+	}
+
+	pub(crate) async fn delete(&self) -> Result<(), Box<dyn Error + Sync + Send>> {
+		let path_str: &String = &self.directory();
+
+		remove_dir_all(path_str).await?;
+		Ok(())
+	}
+
+	pub(crate) async fn delete_plugin(&self, target: Plugin) ->Result<(), Box<dyn Error + Sync + Send>> {
+		let path_str: &String = &format!("{}/plugins/{}.jar", &self.directory(), target.name());
+
+		remove_dir_all(path_str).await?;
+		Ok(())
+	}
+
+	pub(crate) async fn refresh_log_cache(&mut self) -> Result<(), Box<dyn Error + Sync + Send>> {
+		let log_path = format!("{}/logs/latest.log", self.directory());
+		let content = read_to_string(&log_path).await?;
+		self.log_cache = Some(content);
+
+		Ok(())
+	}
+
+	pub(crate) fn log_chunks(&self, chunk_size: usize) -> impl Iterator<Item = &str> {
+		self.log_cache
+			.as_deref()
+			.unwrap_or("")
+			.as_bytes()
+			.chunks(chunk_size)
+			.map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
 	}
 
 	pub(crate) fn with_version(&mut self, version: BuildInfo) -> &mut Self {
@@ -71,8 +143,8 @@ impl MinecraftServer {
 		self.plugins.as_ref()
 	}
 
-	pub(crate) fn name(&self) -> Option<&String> {
-		self.name.as_ref()
+	pub(crate) fn name(&self) -> &str {
+		self.name.as_deref().unwrap_or("No server name found. NaN")
 	}
 
 	pub(crate) fn brand(&self) -> &ServerBrand {
@@ -86,6 +158,10 @@ impl MinecraftServer {
 	pub(crate) fn build(&self) -> &MinecraftServer {
 		self
 	}
+
+	pub(crate) fn directory(&self) -> String {
+		format!("{}/{}", PARENT_PATH, self.name())
+	}
 }
 
 #[cfg(test)]
@@ -98,7 +174,7 @@ mod tests {
 
 		assert!(matches!(server.brand(), ServerBrand::Vanilla));
 		assert_eq!(server.version(), "NaN");
-		assert!(server.name().is_none());
+		assert_eq!(server.name(), "No server name found. NaN");
 		assert!(server.plugins().is_none());
 	}
 
@@ -107,7 +183,7 @@ mod tests {
 		let mut server = MinecraftServer::new();
 		server.with_name(Some(String::from("TestServer")));
 
-		assert_eq!(server.name(), Some(&String::from("TestServer")));
+		assert_eq!(server.name(), "TestServer");
 	}
 
 	#[test]
@@ -138,7 +214,7 @@ mod tests {
 				version: String::from("1.19.2"),
 			});
 
-		assert_eq!(server.name(), Some(&String::from("ChainTest")));
+		assert_eq!(server.name(), "ChainTest");
 		assert!(matches!(server.brand(), ServerBrand::Paper));
 		assert_eq!(server.version(), "1.19.2");
 	}

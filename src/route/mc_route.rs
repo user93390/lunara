@@ -15,17 +15,22 @@ limitations under the License.
 */
 
 use crate::http::plugin_fetch::{TrendingPlugin, fetch_trending_plugins};
+use crate::http::server_creator::ServerCreator;
+use crate::mc::plugin::Plugin;
+use crate::mc::server::ServerBrand::Vanilla;
 use crate::mc::server::{BuildInfo, MinecraftServer, ServerBrand};
+use crate::route::route_error::RouteError;
+use crate::route::route_error::RouteError::{InternalError, NotFound};
 use axum::Json;
 use axum::Router;
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::routing::get;
 use core::str::from_utf8;
-use log::info;
+use log::{debug, error, info, warn};
 use reqwest::Client;
 use serde::Deserialize;
-use tokio::fs::File;
+use tokio::fs::{File, create_dir_all};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const CONF_LOCATION: &str = "servers.json";
@@ -35,32 +40,63 @@ struct TrendingQuery {
 	trending: Option<usize>,
 }
 
+async fn load_server_by_name(name: &str) -> Result<MinecraftServer, RouteError> {
+	let path = std::path::Path::new(CONF_LOCATION);
+	let mut file = File::open(path)
+		.await
+		.map_err(|e| InternalError(format!("failed to open servers.json: {e}")))?;
+
+	let mut contents = vec![];
+	file.read_to_end(&mut contents)
+		.await
+		.map_err(|e| InternalError(format!("failed to read servers.json: {e}")))?;
+
+	let servers: Vec<MinecraftServer> = serde_json::from_slice(&contents)
+		.map_err(|e| InternalError(format!("failed to parse servers.json: {e}")))?;
+
+	servers
+		.into_iter()
+		.find(|s| s.name() == name)
+		.ok_or_else(|| NotFound(format!("server '{}' not found", name)))
+}
+
 pub(crate) fn mc_route() -> Router {
 	Router::new()
 		.route("/plugin/trending", get(trending_plugins))
 		.route("/server/list", get(servers))
+		.route("/server/create/{brand}/{version}", get(create_server))
 		.route(
-			"/server/create/{brand}/{name}/{version}",
-			get(create_server),
+			"/server/create/{brand}/{version}/{name}",
+			get(create_server_with_name),
 		)
+		.route("/server/start/{server}", get(start_server))
+		.route(
+			"/server/{server}/add/{plugin}/{version}",
+			get(add_plugin_to_server),
+		)
+		.route("/server/{server}/delete", get(delete_server))
+		.route("/server/{server}/plugin/list", get(get_plugins_from_server))
+		.route("/server/{server}/logs", get(get_log))
 }
 
 #[axum::debug_handler]
 async fn trending_plugins(
 	Query(query): Query<TrendingQuery>,
-) -> Result<Json<Vec<TrendingPlugin>>, (StatusCode, String)> {
+) -> Result<Json<Option<Vec<TrendingPlugin>>>, RouteError> {
 	let page = query.trending.unwrap_or(1);
-	let plugins = fetch_trending_plugins(&Client::new(), page)
-		.await
-		.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+	let plugins = fetch_trending_plugins(&Client::new(), page).await;
 
-	Ok(Json(plugins))
+	match plugins {
+		Ok(a) => Ok(Json(Some(a))),
+		Err(error) => {
+			error!("Error occurred while fetching plugins. {}", error);
+			Ok(Json(None))
+		}
+	}
 }
 
 #[axum::debug_handler]
 async fn servers() -> Result<Json<String>, (StatusCode, String)> {
-	info!("Listing servers...");
-
 	let path: &std::path::Path = std::path::Path::new(CONF_LOCATION);
 	let mut file: File = File::open(path)
 		.await
@@ -75,40 +111,172 @@ async fn servers() -> Result<Json<String>, (StatusCode, String)> {
 }
 
 #[axum::debug_handler]
-async fn create_server(
-	Path((brand, name, version)): Path<(ServerBrand, String, String)>,
-) -> Result<(), (StatusCode, String)> {
-	info!("Creating new server {}...", name);
+async fn get_log(Query(distance): Query<usize>, Path(server_name): Path<String>) -> Result<String, RouteError> {
+	let mut server = load_server_by_name(&server_name).await?;
 
+	if let Err(error) = server.refresh_log_cache().await {
+		error!("Error refreshing log cache: {}", error);
+	}
+
+	if let Some(chunk) = server.log_chunks(1024 * distance).next() {
+		return Ok(String::from(chunk));
+	}
+
+	Ok(String::new())
+}
+
+#[axum::debug_handler]
+async fn start_server(Path(server_name): Path<String>) -> Result<String, RouteError> {
+	let server = load_server_by_name(&server_name).await?;
+
+	match MinecraftServer::turn_on(&server).await {
+		Ok(_) => {
+			info!("Starting Minecraft server {}", server.name());
+
+			Ok(String::from("Started server..."))
+		}
+		Err(error) => {
+			error!("Error trying to run Minecraft server.");
+
+			Ok(format!("Cause: {}", error))
+		}
+	}
+}
+
+#[axum::debug_handler]
+async fn add_plugin_to_server(
+	Path((server_name, plugin_name, plugin_version)): Path<(String, String, String)>,
+) -> Result<(), RouteError> {
+	let server = load_server_by_name(&server_name).await?;
+
+	if server.brand().eq(&Vanilla) {
+		warn!("Cannot add plugins to vanilla server");
+
+		return Err(InternalError(String::from(
+			"Cannot download plugins on a vanilla server. Try using a paper server?",
+		)));
+	}
+
+	let plugin = Plugin::new(plugin_name.clone(), plugin_version);
+
+	match MinecraftServer::add_plugin(&server, &plugin).await {
+		Ok(_) => {
+			info!("Downloading plugin {}", plugin.name())
+		}
+
+		Err(error) => {
+			error!(
+				"Error trying to download plugin {}. {}",
+				plugin.name(),
+				error
+			);
+
+			return Err(InternalError(String::from(
+				"Plugin doesn't exist or something else is wrong?",
+			)));
+		}
+	}
+	Ok(())
+}
+
+#[axum::debug_handler]
+async fn get_plugins_from_server(
+	Path(server_name): Path<String>,
+) -> Result<Json<Option<Vec<Plugin>>>, RouteError> {
+	let server = load_server_by_name(&server_name).await?;
+
+	match server.plugins() {
+		None => Ok(Json(None)),
+
+		Some(vec) => {
+			let result = Some(vec);
+
+			Ok(Json(result.cloned()))
+		}
+	}
+}
+
+#[axum::debug_handler]
+async fn create_server_with_name(
+	Path((brand, version, name)): Path<(ServerBrand, String, String)>,
+) -> Result<(), RouteError> {
+	create_server_inner(brand, version, Some(name)).await
+}
+
+#[axum::debug_handler]
+async fn create_server(
+	Path((brand, version)): Path<(ServerBrand, String)>,
+) -> Result<(), RouteError> {
+	create_server_inner(brand, version, None).await
+}
+
+async fn create_server_inner(
+	brand: ServerBrand,
+	version: String,
+	name: Option<String>,
+) -> Result<(), RouteError> {
 	let mut new_server = MinecraftServer::new();
 
 	new_server
-		.with_name(Some(name))
 		.with_brand(brand)
 		.with_version(BuildInfo { version })
 		.build();
 
-	let path: &std::path::Path = std::path::Path::new(CONF_LOCATION);
+	let path_fmt_str: &String = &format!("/server/{}", name.clone().unwrap());
+	let path: &str = path_fmt_str.as_str();
 
-	let mut file = File::create(path)
+	if let Err(e) = create_dir_all(path).await {
+		error!("Error creating directory: {}", e)
+	}
+
+	let jar_name: String = match new_server.try_download(path).await {
+		Ok(file_name) => {
+			info!("Downloaded jar!");
+			file_name
+		}
+
+		Err(error) => {
+			error!("Error trying to download_url server jar file.");
+			error!("Ensure you did use a valid version");
+
+			debug!("{}", error);
+
+			return Err(InternalError(String::from(
+				"Cannot download version. Did you type it correctly?",
+			)));
+		}
+	};
+
+	let server_name = name.unwrap_or(jar_name);
+	new_server.with_name(Some(server_name.clone()));
+
+	info!("Creating new server {}...", server_name);
+
+	let path = std::path::Path::new(CONF_LOCATION);
+	let mut file = File::open(path)
 		.await
-		.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+		.map_err(|e| InternalError(format!("failed to create servers.json: {e}")))?;
 
-	let json_str = serde_json::to_string_pretty(&new_server)
-		.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+	let json_str = serde_json::to_string(&new_server)
+		.map_err(|_| InternalError(String::from("serialization failed")))?;
 
 	file.write_all(json_str.as_bytes())
 		.await
-		.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+		.map_err(|e| InternalError(format!("failed to write file: {e}")))?;
 
 	Ok(())
 }
 
 #[axum::debug_handler]
-async fn delete_server(Path(name): Path<String>) {
-	// find & delete on I/O
+async fn delete_server(Path(server_name): Path<String>) -> Result<(), RouteError> {
+	let server = load_server_by_name(&server_name).await?;
+	let result = server.delete().await;
 
-	todo!()
+	if let Err(error) = result {
+		error!("Error deleting server: {}", error)
+	}
+
+	Ok(())
 }
 
 #[cfg(test)]

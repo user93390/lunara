@@ -98,14 +98,12 @@ impl PluginCreator for Plugin {
 			.user_agent("Lunara project. https://github.com/user93390/Lunara")
 			.build()?;
 
-		Ok(
-			client
+		Ok(client
 			.post("https://hangar.papermc.io/api/v1/authenticate")
 			.send()
 			.await?
 			.json::<AuthHelper>()
-			.await?
-		)
+			.await?)
 	}
 }
 

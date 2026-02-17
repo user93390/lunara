@@ -1,11 +1,14 @@
 use crate::mc::server::ServerBrand;
 use crate::mc::server::{BuildInfo, MinecraftServer};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, IntoResponseParts, Response};
 use reqwest::Client;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::io::Error;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::fs;
-use tokio::io::{AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 #[tokio::test]
 async fn handles_invalid_version_correctly() {
@@ -31,7 +34,9 @@ async fn handles_invalid_download_dir() {
 
 	let server = builder.build();
 
-	let result = server.try_download("NaN").await;
+	let result = server
+		.try_download("/nonexistent/path/that/cannot/exist")
+		.await;
 
 	assert!(result.is_err())
 }
@@ -45,17 +50,32 @@ pub enum HttpClientError {
 	#[error("Version not found: {0}")]
 	VersionNotFound(String),
 	#[error("File operation failed: {0}")]
-	FileError(#[from] std::io::Error),
+	FileError(#[from] Error),
 }
 
-trait ServerCreator {
+impl IntoResponse for HttpClientError {
+	fn into_response(self) -> Response {
+		let body = match self {
+			HttpClientError::VersionNotFound(version) => {
+				format!("Cannot find version. Unknown version {}", version)
+			}
+			HttpClientError::InvalidManifest(manifest) => {
+				format!("Invalid manifest. Unknown manifest {}", manifest)
+			}
+			HttpClientError::FileError(error) => format!("File error: {}", error),
+			_ => String::new(),
+		};
+		(StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+	}
+}
+
+pub(crate) trait ServerCreator {
 	async fn resolve_paper_url(&self, client: &Client) -> Result<String, HttpClientError>;
 	async fn resolve_vanilla_url(&self, client: &Client) -> Result<String, HttpClientError>;
 	async fn resolve_download_url(&self, client: &Client) -> Result<String, HttpClientError>;
-	async fn try_download(&self, dir_builder: &str) -> Result<(), HttpClientError>;
+	async fn try_download(&self, dir_builder: &str) -> Result<String, HttpClientError>;
 }
 
-#[cfg(test)]
 impl ServerCreator for MinecraftServer {
 	async fn resolve_paper_url(&self, client: &Client) -> Result<String, HttpClientError> {
 		let mc_version = &self.build().version();
@@ -80,7 +100,9 @@ impl ServerCreator for MinecraftServer {
 
 		let file_name = latest_build["downloads"]["application"]["name"]
 			.as_str()
-			.ok_or(HttpClientError::InvalidManifest("missing download file name"))?;
+			.ok_or(HttpClientError::InvalidManifest(
+				"missing download_url file name",
+			))?;
 
 		Ok(format!(
 			"https://api.papermc.io/v2/projects/paper/versions/{}/builds/{}/downloads/{}",
@@ -118,7 +140,9 @@ impl ServerCreator for MinecraftServer {
 		version_data["downloads"]["server"]["url"]
 			.as_str()
 			.map(String::from)
-			.ok_or(HttpClientError::InvalidManifest("missing server download url"))
+			.ok_or(HttpClientError::InvalidManifest(
+				"missing server download_url url",
+			))
 	}
 
 	async fn resolve_download_url(&self, client: &Client) -> Result<String, HttpClientError> {
@@ -128,21 +152,22 @@ impl ServerCreator for MinecraftServer {
 		}
 	}
 
-	async fn try_download(&self, dir_builder: &str) -> Result<(), HttpClientError> {
+	async fn try_download(&self, dir_path: &str) -> Result<String, HttpClientError> {
 		let client: Client = Client::new();
 		let url: String = self.resolve_download_url(&client).await?;
 
 		let file_name: &str = url.split('/').next_back().unwrap_or("server.jar");
-		let mut path: PathBuf = PathBuf::from(dir_builder);
-		path.push(file_name);
 
-		println!("Downloading to: {:?}", path);
+		let path: &Path = Path::new(dir_path);
+		let mut path_buf: PathBuf = PathBuf::from(path);
+
+		path_buf.push(file_name);
 
 		let response = reqwest::get(&url).await?;
-		let mut file = fs::File::create(path).await?;
+		let mut file = fs::File::create(path_buf).await?;
 		let bytes = response.bytes().await?;
 		file.write_all(&bytes).await?;
 
-		Ok(())
+		Ok(file_name.to_string())
 	}
 }

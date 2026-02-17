@@ -87,7 +87,12 @@ mod tests {
 			let app = user_api(db).await;
 
 			let response: Response = app
-				.oneshot(Request::builder().uri("/users").body(Body::empty()).unwrap())
+				.oneshot(
+					Request::builder()
+						.uri("/users")
+						.body(Body::empty())
+						.unwrap(),
+				)
 				.await
 				.unwrap();
 

@@ -13,13 +13,15 @@ RUN npm install -g bun
 
 COPY . .
 
+RUN make test
 RUN make build
+
 
 FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add --no-cache keyutils perl
+RUN apk add --no-cache keyutils openjdk21
 
 COPY --from=builder /app/target/release/Lunara /usr/local/bin/Lunara
 COPY --from=builder /app/static /app/static

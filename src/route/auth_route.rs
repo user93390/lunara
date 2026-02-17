@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 use crate::api::authentication::Authentication;
 use crate::api::authentication::login::LoginAuth;
 use crate::api::authentication::signup::SignupAuth;
 use crate::database::Database;
 use crate::entity::accounts::{Column, Entity};
 use axum::extract::Path;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::get;
-use axum::{Json, Router};
+use axum::Router;
 use base64::engine::general_purpose;
 use base64::{Engine, alphabet, engine};
 use log::{info, warn};
@@ -31,6 +32,8 @@ use uuid::Uuid;
 
 use axum::body::Body;
 use axum::http::StatusCode;
+
+
 
 pub(crate) async fn auth_api(db: Database) -> Router {
 	Router::new()
@@ -42,23 +45,18 @@ pub(crate) async fn auth_api(db: Database) -> Router {
 async fn signup(
 	axum::extract::State(db): axum::extract::State<Arc<Database>>,
 	Path((uuid_b64, username_b64, password_b64)): Path<(String, String, String)>,
-) -> Json<String> {
-	let username_bytes = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
-		.decode(username_b64)
-		.unwrap();
+) -> Response {
+	let Ok(username) = decode_b64_string(&username_b64) else {
+		return response(StatusCode::BAD_REQUEST, "Invalid username encoding.");
+	};
 
-	let username = String::from_utf8(username_bytes).unwrap();
+	let Ok(password) = decode_b64(&password_b64) else {
+		return response(StatusCode::BAD_REQUEST, "Invalid password encoding.");
+	};
 
-	let password = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
-		.decode(password_b64)
-		.unwrap();
-
-	let uuid_bytes = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
-		.decode(uuid_b64)
-		.unwrap();
-
-	let uuid_str = String::from_utf8(uuid_bytes).unwrap();
-	let uuid = Uuid::parse_str(&uuid_str).expect("Bad uuid.");
+	let Ok(uuid) = decode_b64_uuid(&uuid_b64) else {
+		return response(StatusCode::BAD_REQUEST, "Invalid uuid encoding.");
+	};
 
 	let signup = SignupAuth {
 		uuid,
@@ -67,25 +65,32 @@ async fn signup(
 		db,
 	};
 
-	let status = signup.await_signup(signup.clone()).await.unwrap();
-
-	Json(status.to_string())
+	match signup.await_signup(signup.clone()).await {
+		Ok(status) => {
+			if status.is_success() {
+				response(StatusCode::OK, "Signed up!")
+			} else {
+				response(StatusCode::BAD_REQUEST, "Bad request")
+			}
+		},
+		Err(e) => {
+			warn!("Signup failed: {}", e);
+			response(StatusCode::INTERNAL_SERVER_ERROR, "Signup failed.")
+		}
+	}
 }
 
 async fn login(
 	axum::extract::State(db): axum::extract::State<Arc<Database>>,
 	Path((uuid_b64, password_b64)): Path<(String, String)>,
-) -> impl IntoResponse {
-	let password_bytes = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
-		.decode(password_b64)
-		.unwrap();
+) -> Response {
+	let Ok(password_bytes) = decode_b64(&password_b64) else {
+		return response(StatusCode::BAD_REQUEST, "Invalid password encoding.");
+	};
 
-	let uuid_bytes = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
-		.decode(uuid_b64)
-		.unwrap();
-
-	let uuid_str = String::from_utf8(uuid_bytes).unwrap();
-	let uuid = Uuid::parse_str(&uuid_str).expect("Bad uuid.");
+	let Ok(uuid) = decode_b64_uuid(&uuid_b64) else {
+		return response(StatusCode::BAD_REQUEST, "Invalid uuid encoding.");
+	};
 
 	let login = LoginAuth {
 		uuid,
@@ -103,45 +108,49 @@ async fn login(
 		Ok(Some(acc)) => acc,
 		Ok(None) => {
 			warn!("Account not found for UUID: {}", login.uuid);
-			return Response::builder()
-				.status(StatusCode::UNAUTHORIZED)
-				.body(Body::from("Authentication failed."))
-				.unwrap_or_else(|_| Response::new(Body::from("Authentication failed.")));
+			return response(StatusCode::UNAUTHORIZED, "Authentication failed.");
 		}
 		Err(e) => {
 			warn!("Database error during account lookup: {}", e);
-			return Response::builder()
-				.status(StatusCode::INTERNAL_SERVER_ERROR)
-				.body(Body::from("Internal server error."))
-				.unwrap_or_else(|_| Response::new(Body::from("Internal server error.")));
+			return response(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.");
 		}
 	};
 
-	let password_str = match String::from_utf8(login.password.clone()) {
-		Ok(s) => s,
-		Err(_) => {
-			warn!("Invalid UTF-8 in password for UUID: {}", login.uuid);
-			return Response::builder()
-				.status(StatusCode::BAD_REQUEST)
-				.body(Body::from("Invalid password format."))
-				.unwrap_or_else(|_| Response::new(Body::from("Invalid password format.")));
-		}
+	let Ok(password_str) = String::from_utf8(login.password.clone()) else {
+		warn!("Invalid UTF-8 in password for UUID: {}", login.uuid);
+		return response(StatusCode::BAD_REQUEST, "Invalid password format.");
 	};
 
 	if account.password.eq(&password_str) {
 		info!("Authorized as {}!", account.username);
-		return Response::builder()
-			.status(StatusCode::ACCEPTED)
-			.body(Body::from("Logged in!"))
-			.unwrap_or_else(|_| Response::new(Body::from("Logged in!")));
+		return response(StatusCode::ACCEPTED, "Logged in!");
 	}
 
 	warn!("Bad credentials.");
+	response(StatusCode::UNAUTHORIZED, "Authentication failed.")
+}
 
+fn response(status: StatusCode, msg: &'static str) -> Response {
 	Response::builder()
-		.status(StatusCode::UNAUTHORIZED)
-		.body(Body::from("Authentication failed."))
-		.unwrap_or_else(|_| Response::new(Body::from("Authentication failed.")))
+		.status(status)
+		.body(Body::from(msg))
+		.unwrap_or_else(|_| Response::new(Body::from(msg)))
+}
+
+fn decode_b64(input: &str) -> Result<Vec<u8>, ()> {
+	engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD)
+		.decode(input)
+		.map_err(|_| ())
+}
+
+fn decode_b64_string(input: &str) -> Result<String, ()> {
+	let bytes = decode_b64(input)?;
+	String::from_utf8(bytes).map_err(|_| ())
+}
+
+fn decode_b64_uuid(input: &str) -> Result<Uuid, ()> {
+	let s = decode_b64_string(input)?;
+	Uuid::parse_str(&s).map_err(|_| ())
 }
 
 #[cfg(test)]
@@ -166,7 +175,7 @@ mod tests {
 			.decode(encoded)
 			.unwrap();
 
-		let decoded_str= String::from_utf8(decoded).unwrap();
+		let decoded_str = String::from_utf8(decoded).unwrap();
 
 		assert_eq!(expected, decoded_str)
 	}

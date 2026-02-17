@@ -15,7 +15,7 @@
  */
 
 use keyring::Entry;
-use rand::Rng;
+use rand::RngExt;
 use std::error::Error;
 
 use log::error;

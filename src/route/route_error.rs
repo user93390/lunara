@@ -29,11 +29,14 @@ pub enum RouteError {
 impl IntoResponse for RouteError {
 	fn into_response(self) -> Response {
 		match self {
-			InternalError(error) => {
-				(StatusCode::INTERNAL_SERVER_ERROR, format!("Internal route error: {}", error))
-					.into_response()
+			InternalError(error) => (
+				StatusCode::INTERNAL_SERVER_ERROR,
+				format!("Internal route error: {}", error),
+			)
+				.into_response(),
+			NotFound(error) => {
+				(StatusCode::NOT_FOUND, format!("Not found: {}", error)).into_response()
 			}
-			NotFound(error) => (StatusCode::NOT_FOUND, format!("Not found: {}", error)).into_response(),
 		}
 	}
 }

@@ -19,10 +19,10 @@ use crate::api::authentication::login::LoginAuth;
 use crate::api::authentication::signup::SignupAuth;
 use crate::database::Database;
 use crate::entity::accounts::{Column, Entity};
+use axum::Router;
 use axum::extract::Path;
 use axum::response::Response;
 use axum::routing::get;
-use axum::Router;
 use base64::engine::general_purpose;
 use base64::{Engine, alphabet, engine};
 use log::{info, warn};
@@ -32,14 +32,15 @@ use uuid::Uuid;
 
 use axum::body::Body;
 use axum::http::StatusCode;
-
-
+use axum_cookie::{CookieLayer, CookieManager};
+use axum_cookie::cookie::Cookie;
 
 pub(crate) async fn auth_api(db: Database) -> Router {
 	Router::new()
 		.route("/signup/{uuid}/{username}/{password}", get(signup))
 		.route("/login/{username}/{password}", get(login))
 		.with_state(Arc::new(db))
+		.layer(CookieLayer::default())
 }
 
 async fn signup(
@@ -72,7 +73,7 @@ async fn signup(
 			} else {
 				response(StatusCode::BAD_REQUEST, "Bad request")
 			}
-		},
+		}
 		Err(e) => {
 			warn!("Signup failed: {}", e);
 			response(StatusCode::INTERNAL_SERVER_ERROR, "Signup failed.")
@@ -81,6 +82,7 @@ async fn signup(
 }
 
 async fn login(
+	manager: CookieManager,
 	axum::extract::State(db): axum::extract::State<Arc<Database>>,
 	Path((uuid_b64, password_b64)): Path<(String, String)>,
 ) -> Response {
@@ -122,7 +124,9 @@ async fn login(
 	};
 
 	if account.password.eq(&password_str) {
-		info!("Authorized as {}!", account.username);
+		manager.add(Cookie::new("username", account.username.clone()));
+
+		info!("Authorized as {}!", &account.username);
 		return response(StatusCode::ACCEPTED, "Logged in!");
 	}
 

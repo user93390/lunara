@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-use crate::http::plugin_fetch::{TrendingPlugin, fetch_trending_plugins};
+use crate::http::plugin_fetch::{TrendingPlugin, fetch_plugin_versions, fetch_trending_plugins};
 use crate::http::server_creator::ServerCreator;
 use crate::mc::plugin::Plugin;
 use crate::mc::server::ServerBrand::Vanilla;
@@ -77,6 +77,22 @@ pub(crate) fn mc_route() -> Router {
 		.route("/server/{server}/delete", get(delete_server))
 		.route("/server/{server}/plugin/list", get(get_plugins_from_server))
 		.route("/server/{server}/logs", get(get_log))
+		.route("/plugin/versions/{plugin}", get(get_versions))
+}
+
+const MAX_VERSIONS: i16 = 25;
+
+#[axum::debug_handler]
+async fn get_versions(Path(plugin): Path<String>) -> Result<Json<Vec<String>>, RouteError> {
+	let versions = fetch_plugin_versions(&Client::new(), &plugin, MAX_VERSIONS).await;
+
+	match versions {
+		Ok(v) => Ok(Json(v)),
+		Err(error) => {
+			error!("Error fetching versions for {}. {}", plugin, error);
+			Ok(Json(vec![]))
+		}
+	}
 }
 
 #[axum::debug_handler]
@@ -111,7 +127,10 @@ async fn servers() -> Result<Json<String>, (StatusCode, String)> {
 }
 
 #[axum::debug_handler]
-async fn get_log(Query(distance): Query<usize>, Path(server_name): Path<String>) -> Result<String, RouteError> {
+async fn get_log(
+	Query(distance): Query<usize>,
+	Path(server_name): Path<String>,
+) -> Result<String, RouteError> {
 	let mut server = load_server_by_name(&server_name).await?;
 
 	if let Err(error) = server.refresh_log_cache().await {

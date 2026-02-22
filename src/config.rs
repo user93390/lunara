@@ -1,3 +1,20 @@
+/*
+Copyright 2026 seasnail1
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
+
 use std::{error::Error, str::from_utf8};
 
 use log::{info, warn};
@@ -17,6 +34,7 @@ pub(crate) struct Config {
 	connection_string: String,
 	port: u16,
 }
+
 impl Config {
 	pub(crate) fn default() -> Self {
 		Self {
@@ -49,6 +67,8 @@ impl Config {
 		self
 	}
 
+	/// Returns 'Some' result.
+	/// Returns 'None' result if config is empty.
 	pub(crate) async fn get_from_toml(
 		&self,
 	) -> Result<Option<Config>, Box<dyn Error + Send + Sync>> {
@@ -72,6 +92,9 @@ impl Config {
 		Ok(Some(config))
 	}
 
+	/// Returns 'false' if either:
+	/// Path doesn't exist or Path IS a folder
+	/// Returns true if successful
 	pub(crate) async fn write_toml(&self) -> Result<bool, Box<dyn Error + Send + Sync>> {
 		let path: &Path = Path::new(CONF_LOCATION);
 
@@ -88,6 +111,7 @@ impl Config {
 		let toml = toml::to_string(self)?;
 
 		let mut file = File::create(path).await?;
+
 		file.write_buf(&mut toml.as_bytes()).await?;
 
 		info!("Wrote to path.");
@@ -95,6 +119,7 @@ impl Config {
 		Ok(true)
 	}
 
+	/// Returns a prettified version of config file.
 	pub fn get_toml(&self) -> Result<String, Box<dyn Error + Send + Sync>> {
 		let toml = toml::to_string_pretty(&self)?;
 

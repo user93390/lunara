@@ -96,7 +96,10 @@ impl MinecraftServer {
 		Ok(())
 	}
 
-	pub(crate) async fn delete_plugin(&self, target: Plugin) ->Result<(), Box<dyn Error + Sync + Send>> {
+	pub(crate) async fn delete_plugin(
+		&self,
+		target: Plugin,
+	) -> Result<(), Box<dyn Error + Sync + Send>> {
 		let path_str: &String = &format!("{}/plugins/{}.jar", &self.directory(), target.name());
 
 		remove_dir_all(path_str).await?;

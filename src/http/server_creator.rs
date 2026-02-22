@@ -1,7 +1,6 @@
-use crate::mc::server::ServerBrand;
-use crate::mc::server::{BuildInfo, MinecraftServer};
+use crate::mc::server::{BuildInfo, ServerBrand, MinecraftServer};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, IntoResponseParts, Response};
+use axum::response::{IntoResponse, Response};
 use reqwest::Client;
 use serde_json::Value;
 use std::io::Error;

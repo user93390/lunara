@@ -1,35 +1,16 @@
-/*
- * Copyright 2026 seasnail1
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import './styles/style.scss';
-
-import CredentialLoginPage from './pages/login'
-import HomePage from './pages/home.tsx'
-import PluginBoard from './pages/plugin.tsx'
-
 import { Routes, Route } from 'react-router-dom';
+import LoginPage from "./authentication/LoginPage.tsx";
+import HomePage from "./home/HomePage.tsx";
+import PluginPage from "./plugins/PluginPage.tsx";
 
 function App() {
     return (
         <Routes>
             <Route path="/" element={<HomePage/>} />
-            <Route path="/login" element={<CredentialLoginPage/>} />
-            <Route path="/plugins" element={<PluginBoard/>} />
+            <Route path="/login" element={<LoginPage/>}/>
+            <Route path="/marketplace" element={<PluginPage/>}/>
         </Routes>
     );
 }
 
-export default App;
+export default App

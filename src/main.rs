@@ -29,6 +29,7 @@ mod route;
 
 use axum::{Json, Router};
 use std::collections::HashMap;
+use std::env::{Args, args};
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
@@ -40,13 +41,14 @@ use crate::{
 	route::{api_route, auth_route},
 };
 
-use log::{LevelFilter, error, info, warn};
+use log::{LevelFilter, debug, error, info, warn};
 
 use crate::route::mc_route::mc_route;
 use axum::routing::get;
 use keyring_service::KeyringService;
 use tokio::{fs::File, net::TcpListener};
-use tower_cookies::CookieManagerLayer;
+
+const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 const SERVER_ADDR: &str = "0.0.0.0";
 const SERVER_PORT: u16 = 5000;
@@ -61,35 +63,22 @@ const POSTGRES_PASSWORD_DEF: &str = "postgres";
 pub struct App {
 	config: Config,
 }
-
 impl App {
-	/// <p>Create an asynchronous router.</p>
-	/// <p>Return all routes by nesting them inside a brand-new route.</p>
-	async fn start(self) -> Result<Router, Box<dyn Error + Send + Sync>> {
+	/// Returns a result that contains database-required routes.
+	/// This function initializes a database variable and creates a pointer for it.
+	/// If the database's connection times out or something goes wrong, the functionality of returned routes won't work as intended.
+	async fn start(self) -> Result<(Router, Router), Box<dyn Error + Send + Sync>> {
 		let conn_str: &String = self.config.conn_str();
 
 		info!("database connection str: {}", conn_str);
 
 		let result: Database = database::database(conn_str).await?;
-
-		// create pointer.
 		let db: Arc<Database> = Arc::new(result);
 
 		let auth_route: Router<_> = auth_route::auth_api((*db).clone()).await;
 		let api_route: Router<_> = api_route::user_api((*db).clone()).await;
-		let mc_route: Router<_> = mc_route();
 
-		let serve_dir = ServeDir::new("static")
-			.append_index_html_on_directories(true)
-			.not_found_service(ServeFile::new("static/index.html"));
-
-		Ok(Router::new()
-			.layer(CookieManagerLayer::new())
-			.route("/health", get(Json("Healthy!")))
-			.nest("/auth/v1", auth_route)
-			.nest("/api", api_route)
-			.nest("/mc", mc_route)
-			.fallback_service(serve_dir))
+		Ok((auth_route, api_route))
 	}
 
 	pub async fn init_keyring(
@@ -103,16 +92,14 @@ impl App {
 			("db.password", POSTGRES_PASSWORD_DEF),
 		];
 
+		info!("Initializing database credentials");
+
 		let hash: HashMap<&str, &str> = secrets.iter().cloned().collect();
 
 		for (key, value) in hash {
-			if let Err(e) = keyring_service.set_secret(key, value).await {
-				error!("Keyring failed!");
-
-				error!(
-					"Failed to store secret '{}' in keyring: {}. Using default.",
-					key, e
-				);
+			if let Err(error) = keyring_service.set_secret(key, value).await {
+				error!("Failed to store secret:");
+				error!("{}: {}", error, key);
 			}
 		}
 		Ok(())
@@ -121,10 +108,18 @@ impl App {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+	env_logger::builder()
+		.format_timestamp_secs()
+		.format_level(true)
+		.filter_level(LOG_LEVEL)
+		.init();
+
 	let config_path: &Path = Path::new("config.toml");
 
 	if !config_path.exists() {
 		File::create_new("config.toml").await?;
+
+		debug!("Creating new config.toml file");
 	}
 
 	let toml_result = Config::default().get_from_toml().await;
@@ -133,14 +128,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		error!("Config error: {:?}", e);
 	};
 
-	let mut config: Config = toml_result?.unwrap();
-
-	env_logger::builder()
-		.format_timestamp_secs()
-		.format_level(true)
-		.filter_level(LevelFilter::Debug)
-		.filter_module("sqlx::query", LevelFilter::Warn)
-		.init();
+	// Get toml result, fallback to default config if something didn't work.
+	let mut config: Config = toml_result?.unwrap_or(Config::default());
 
 	info!("Running Lunara.");
 
@@ -198,31 +187,31 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 		config: config.clone(),
 	};
 
-	let app: Router = match app.start().await {
-		Ok(router) => {
+	let (db_routes, health_msg) = match app.start().await {
+		Ok((auth, api)) => {
 			info!("Database connected successfully");
-			router
+			(Some((auth, api)), "Healthy!")
 		}
-
-		Err(e) => {
-			let mc_route: Router<_> = mc_route();
-
-			error!("Failed to connect to database: {}", e);
-			warn!("Starting server in degraded mode. Database-dependent routes will fail.");
-
-			let serve_dir = ServeDir::new("static")
-				.append_index_html_on_directories(true)
-				.not_found_service(ServeFile::new("static/index.html"));
-
-			Router::new()
-				.route(
-					"/health",
-					get(Json("Healthy (degraded mode - no database)")),
-				)
-				.nest("/mc", mc_route)
-				.fallback_service(serve_dir)
+		Err(error) => {
+			error!("connection timed out. More information: {}", error);
+			warn!("Don't worry! You can still use Lunara without a database.");
+			(None, "Healthy (degraded mode - no database)")
 		}
 	};
+
+	let mc_route: Router<_> = mc_route();
+	let serve_dir = ServeDir::new("static")
+		.append_index_html_on_directories(true)
+		.not_found_service(ServeFile::new("static/index.html"));
+
+	let mut app = Router::new()
+		.route("/health", get(Json(health_msg)))
+		.nest("/mc", mc_route)
+		.fallback_service(serve_dir);
+
+	if let Some((auth, api)) = db_routes {
+		app = app.nest("/auth/v1", auth).nest("/api", api);
+	}
 
 	let string_addr: String = format!("{}:{}", SERVER_ADDR, SERVER_PORT);
 	let alt_addr: String = format!("localhost:{}", SERVER_PORT);
@@ -234,14 +223,17 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 	let listener: TcpListener = TcpListener::bind(string_addr).await?;
 
+	debug!("serving...");
+
 	config.write_toml().await?;
 	axum::serve(listener, app).await?;
+
 	Ok(())
 }
 
-/// <p>Converts a vector array into an array.</p>
-/// <p>It's very dangerous due to it using panic logic.</p>
-/// <p>note: Ensure you pass the right size</p>
+/// Converts a vector array into an array.
+/// This function is dangerous due to it using panic.
+/// note: Ensure you pass the right size
 fn conv_vec_arr<T, const V: usize>(v: Vec<T>) -> [T; V] {
 	v.try_into()
 		.unwrap_or_else(|_| panic!("Expected vec of length {}", V))

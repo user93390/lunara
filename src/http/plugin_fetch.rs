@@ -34,6 +34,8 @@ pub struct TrendingPlugin {
 	pub stats: PluginStats,
 	#[serde(rename = "avatarUrl")]
 	pub icon_url: String,
+	#[serde(default)]
+	pub version: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -53,13 +55,20 @@ struct HangarResponse {
 	result: Vec<TrendingPlugin>,
 }
 
+#[derive(Deserialize)]
+struct VersionsResponse {
+	result: Vec<VersionEntry>,
+}
+
+#[derive(Deserialize)]
+struct VersionEntry {
+	name: String,
+}
+
 #[derive(Debug, Error)]
 pub enum PluginError {
 	#[error("Unknown plugin: {0}")]
 	UnknownPlugin(#[from] reqwest::Error),
-
-	#[error("Bad plugin ID")]
-	BadPluginID(reqwest::Error),
 
 	#[error("Authentication error")]
 	Unauthorized(String),
@@ -80,6 +89,21 @@ pub async fn fetch_trending_plugins(
 	Ok(resp.result)
 }
 
+pub async fn fetch_plugin_versions(
+	client: &Client,
+	slug: &str,
+	limit: i16,
+) -> Result<Vec<String>, PluginError> {
+	let url: String = format!(
+		"https://hangar.papermc.io/api/v1/projects/{}/versions?limit={}",
+		slug, limit
+	);
+
+	let resp: VersionsResponse = client.get(&url).send().await?.json().await?;
+
+	Ok(resp.result.into_iter().map(|v| v.name).collect())
+}
+
 trait PluginCreator {
 	async fn get_plugin_by_id(&self, auth: AuthHelper, plugin: Plugin) -> Result<(), PluginError>;
 	async fn authenticate(&self) -> Result<AuthHelper, PluginError>;
@@ -91,7 +115,7 @@ impl PluginCreator for Plugin {
 			return Err(PluginError::Unauthorized("Auth token expired".to_string()));
 		}
 
-		Ok(())
+		todo!();
 	}
 	async fn authenticate(&self) -> Result<AuthHelper, PluginError> {
 		let client: Client = Client::builder()
@@ -132,6 +156,21 @@ mod tests {
 		assert_eq!(plugin.namespace.slug, "test_slug");
 		assert_eq!(plugin.stats.downloads, 1000);
 		assert_eq!(plugin.stats.stars, 50);
+		assert_eq!(plugin.version, "");
+	}
+
+	#[test]
+	fn trending_plugin_deserializes_with_version() {
+		let json = r#"{
+			"name": "TestPlugin",
+			"namespace": {"owner": "test_owner", "slug": "test_slug"},
+			"stats": {"downloads": 1000, "stars": 50},
+			"avatarUrl": "https://example.com/icon.png",
+			"version": "1.2.0"
+		}"#;
+
+		let plugin: TrendingPlugin = serde_json::from_str(json).unwrap();
+		assert_eq!(plugin.version, "1.2.0");
 	}
 
 	#[test]
